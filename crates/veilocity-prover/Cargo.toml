@@ -1,0 +1,16 @@
+[package]
+name = "veilocity-prover"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+veilocity-core = { path = "../veilocity-core" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+hex.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

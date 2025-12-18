@@ -1,0 +1,39 @@
+# Rust
+/target/
+Cargo.lock
+
+# Noir
+circuits/target/
+circuits/Prover.toml
+circuits/Verifier.toml
+*.gz
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/lib/
+
+# Environment
+.env
+.env.local
+*.pem
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local state
+*.db
+*.sqlite
+.veilocity/
+
+# Proofs (can be large)
+*.proof
+proofs/

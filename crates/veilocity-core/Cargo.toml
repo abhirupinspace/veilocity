@@ -1,0 +1,19 @@
+[package]
+name = "veilocity-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ark-ff.workspace = true
+ark-bn254.workspace = true
+light-poseidon.workspace = true
+rusqlite.workspace = true
+redb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+hex.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
