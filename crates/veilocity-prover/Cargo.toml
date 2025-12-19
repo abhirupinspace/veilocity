@@ -9,7 +9,7 @@ keywords = ["privacy", "zk", "noir", "prover"]
 categories = ["cryptography"]
 
 [dependencies]
-veilocity-core = { path = "../veilocity-core", version = "0.1.2" }
+veilocity-core = { path = "../veilocity-core", version = "0.1.3" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
