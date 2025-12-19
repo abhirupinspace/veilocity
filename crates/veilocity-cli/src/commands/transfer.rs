@@ -1,6 +1,7 @@
 //! Transfer command - send private transfer to another user
 
 use crate::config::Config;
+use crate::ui;
 use crate::wallet::{format_eth, parse_eth, WalletManager};
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
@@ -18,8 +19,11 @@ pub async fn run(config: &Config, recipient: &str, amount: f64, dry_run: bool) -
     let wallet = wallet_manager.load_wallet()?;
 
     // Get password
-    let password = rpassword::prompt_password("Enter wallet password: ")
-        .context("Failed to read password")?;
+    let password = rpassword::prompt_password(format!(
+        "{} ",
+        "Enter wallet password:".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    ))
+    .context("Failed to read password")?;
 
     // Get Veilocity secret
     let veilocity_secret = wallet_manager.get_veilocity_secret(&wallet, &password)?;
@@ -32,21 +36,32 @@ pub async fn run(config: &Config, recipient: &str, amount: f64, dry_run: bool) -
     let amount_wei = parse_eth(amount);
 
     println!();
-    println!("{}", "═══ Private Transfer ═══".blue().bold());
+    println!("{}", ui::header("Private Transfer"));
+    println!();
+
+    // Amount display
     println!(
-        "Amount:    {} {}",
-        format_eth(amount_wei).bright_white().bold(),
+        "  {} {}  {}",
+        "↗".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2).bold(),
+        format_eth(amount_wei).truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2).bold(),
         format!("({} wei)", amount_wei).dimmed()
     );
+    println!();
+
+    ui::divider(55);
+    println!();
+
+    // Format recipient for display
+    let recipient_short = if recipient.len() > 20 {
+        format!("0x{}...{}", &recipient[2..10], &recipient[recipient.len() - 6..])
+    } else {
+        recipient.to_string()
+    };
+
     println!(
-        "Recipient: 0x{}...{}",
-        &recipient[..8.min(recipient.len())].bright_white(),
-        if recipient.len() > 8 {
-            &recipient[recipient.len() - 6..]
-        } else {
-            ""
-        }
-        .bright_white()
+        "  {} {}",
+        "Recipient:".truecolor(120, 120, 120),
+        recipient_short.bright_white()
     );
 
     // Load state
@@ -72,7 +87,8 @@ pub async fn run(config: &Config, recipient: &str, amount: f64, dry_run: bool) -
     }
 
     println!(
-        "Balance:   {} {}",
+        "  {} {} {}",
+        "Balance:  ".truecolor(120, 120, 120),
         format_eth(sender_account.balance).green(),
         "(private)".dimmed()
     );
@@ -103,32 +119,37 @@ pub async fn run(config: &Config, recipient: &str, amount: f64, dry_run: bool) -
 
     if dry_run {
         println!();
-        println!("{}", "DRY RUN - No transfer executed".yellow().bold());
-        println!(
-            "{}",
-            "Proof would be generated and state would be updated.".dimmed()
+        ui::print_notice(
+            "DRY RUN",
+            "Proof would be generated and state updated. Remove --dry-run to execute.",
         );
-        println!("{}", "Remove --dry-run to execute the transfer.".dimmed());
         return Ok(());
     }
 
     println!();
-    println!("{}", "Generating ZK proof...".yellow());
-    println!("{}", "(this may take a moment)".dimmed());
+    println!(
+        "  {} Generating ZK proof...",
+        "◐".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!("    {}", "(this may take a moment)".dimmed());
 
     // Generate proof
     let prover = NoirProver::new(PathBuf::from("circuits"));
 
     if !prover.is_compiled() {
-        println!("{}", "Compiling circuits...".yellow());
+        println!(
+            "  {} Compiling circuits...",
+            "◐".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+        );
         prover.compile().await?;
     }
 
     let proof = prover.prove_transfer(&witness).await?;
 
     println!(
-        "{}",
-        format!("✓ Proof generated ({} bytes)", proof.len()).green()
+        "  {} Proof generated ({} bytes)",
+        "✓".green().bold(),
+        proof.len()
     );
 
     // Update local state
@@ -150,33 +171,39 @@ pub async fn run(config: &Config, recipient: &str, amount: f64, dry_run: bool) -
     // Record transaction
     let _ = state.record_transaction("transfer", amount_wei, None, Some(recipient), "confirmed");
 
+    ui::print_success("Transfer complete!");
     println!();
-    println!("{}", "✓ Transfer complete!".green().bold());
     println!(
-        "Nullifier: 0x{}...",
+        "  {} 0x{}...",
+        "Nullifier:".truecolor(120, 120, 120),
         &hex::encode(&nullifier_bytes)[..16].dimmed()
     );
 
     println!();
-    println!("{}", "─".repeat(50));
+    ui::divider_double(55);
     println!(
-        "{} sent privately to recipient",
-        format_eth(amount_wei).blue().bold()
+        "  {} {} sent privately",
+        "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
+        format_eth(amount_wei).truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2).bold()
     );
     println!(
-        "New balance: {}",
-        format_eth(sender_updated.balance).bright_white()
+        "  New balance: {}",
+        format_eth(sender_updated.balance)
+            .truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+            .bold()
     );
+    ui::divider_double(55);
 
     println!();
     println!(
-        "{}",
-        "Note: This is an off-chain transfer. The recipient".dimmed()
+        "  {}",
+        "Note: This is an off-chain transfer.".truecolor(150, 150, 150).italic()
     );
     println!(
-        "{}",
-        "will see the funds after syncing their local state.".dimmed()
+        "  {}",
+        "The recipient will see funds after syncing their local state.".truecolor(150, 150, 150).italic()
     );
+    println!();
 
     info!(
         "Private transfer of {} wei to {} completed",

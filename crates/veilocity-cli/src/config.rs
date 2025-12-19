@@ -219,13 +219,18 @@ pub fn load_config(config_path: &str, network: &str) -> Result<Config> {
     if expanded_path.exists() {
         Config::load(&expanded_path)
     } else {
-        // Use default config for the specified network
-        let mut config = Config::for_network(network);
-        config.data_dir = expanded_path
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(get_data_dir);
-        Ok(config)
+        // Check if there's a config in the default data directory
+        let default_data_dir = get_data_dir();
+        let default_config_path = default_data_dir.join("config.toml");
+
+        if default_config_path.exists() {
+            Config::load(&default_config_path)
+        } else {
+            // Use default config for the specified network
+            let mut config = Config::for_network(network);
+            config.data_dir = default_data_dir;
+            Ok(config)
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 //! Withdraw command - withdraw funds from Veilocity to Mantle
 
 use crate::config::Config;
+use crate::ui;
 use crate::wallet::{format_eth, parse_eth, WalletManager};
 use alloy::primitives::{Address, B256, U256};
 use anyhow::{anyhow, Context, Result};
@@ -20,8 +21,11 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_ru
     let wallet = wallet_manager.load_wallet()?;
 
     // Get password
-    let password = rpassword::prompt_password("Enter wallet password: ")
-        .context("Failed to read password")?;
+    let password = rpassword::prompt_password(format!(
+        "{} ",
+        "Enter wallet password:".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    ))
+    .context("Failed to read password")?;
 
     // Unlock wallet and get secrets
     let signer = wallet_manager.unlock(&wallet, &password)?;
@@ -51,14 +55,30 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_ru
     let amount_wei = parse_eth(amount);
 
     println!();
-    println!("{}", "═══ Withdrawal Details ═══".red().bold());
+    println!("{}", ui::header("Withdrawal"));
+    println!();
+
+    // Amount display
     println!(
-        "Amount:    {} {}",
-        format_eth(amount_wei).bright_white().bold(),
+        "  {} {}  {}",
+        "↑".red().bold(),
+        format_eth(amount_wei).red().bold(),
         format!("({} wei)", amount_wei).dimmed()
     );
-    println!("Recipient: {}", format!("{:?}", recipient_address).bright_white());
-    println!("Network:   {}", config.network.rpc_url.dimmed());
+    println!();
+
+    ui::divider(55);
+    println!();
+    println!(
+        "  {} {:?}",
+        "Recipient:".truecolor(120, 120, 120),
+        recipient_address.to_string().bright_white()
+    );
+    println!(
+        "  {} {}",
+        "Network:  ".truecolor(120, 120, 120),
+        config.network.rpc_url.dimmed()
+    );
 
     // Load state
     let mut state = StateManager::new(&config.db_path())
@@ -83,7 +103,8 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_ru
     }
 
     println!(
-        "Balance:   {} {}",
+        "  {} {} {}",
+        "Balance:  ".truecolor(120, 120, 120),
         format_eth(account.balance).green(),
         "(private)".dimmed()
     );
@@ -124,29 +145,37 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_ru
 
     if dry_run {
         println!();
-        println!("{}", "DRY RUN - No transaction submitted".yellow().bold());
-        println!("{}", "Proof would be generated and withdrawal submitted.".dimmed());
-        println!("{}", "Remove --dry-run to execute the withdrawal.".dimmed());
+        ui::print_notice(
+            "DRY RUN",
+            "Proof would be generated and withdrawal submitted. Remove --dry-run to execute.",
+        );
         return Ok(());
     }
 
     println!();
-    println!("{}", "Generating withdrawal proof...".yellow());
-    println!("{}", "(this may take a moment)".dimmed());
+    println!(
+        "  {} Generating withdrawal proof...",
+        "◐".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!("    {}", "(this may take a moment)".dimmed());
 
     // Generate proof
     let prover = NoirProver::new(PathBuf::from("circuits"));
 
     if !prover.is_compiled() {
-        println!("{}", "Compiling circuits...".yellow());
+        println!(
+            "  {} Compiling circuits...",
+            "◐".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+        );
         prover.compile().await?;
     }
 
     let proof = prover.prove_withdraw(&witness).await?;
 
     println!(
-        "{}",
-        format!("✓ Proof generated ({} bytes)", proof.len()).green()
+        "  {} Proof generated ({} bytes)",
+        "✓".green().bold(),
+        proof.len()
     );
 
     // Create vault client
@@ -159,14 +188,17 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_ru
 
     // Check if root is valid on-chain
     if !vault.is_valid_root(B256::from(state_root_bytes)).await? {
-        println!(
-            "{}",
-            "⚠ Warning: State root may be outdated. Consider running 'veilocity sync'.".yellow()
+        ui::print_notice(
+            "Outdated State",
+            "State root may be outdated. Consider running 'veilocity sync'.",
         );
     }
 
     println!();
-    println!("{}", "Submitting withdrawal transaction...".yellow());
+    println!(
+        "  {} Submitting withdrawal transaction...",
+        "◐".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
 
     // Submit withdrawal
     let tx_hash = vault
@@ -197,28 +229,40 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_ru
         "confirmed",
     );
 
+    ui::print_success("Withdrawal successful!");
     println!();
-    println!("{}", "✓ Withdrawal successful!".green().bold());
-    println!("Transaction: 0x{}", tx_hash_hex.bright_white());
+    println!(
+        "  {} 0x{}",
+        "Transaction:".truecolor(120, 120, 120),
+        tx_hash_hex.bright_white()
+    );
 
     if let Some(explorer) = &config.network.explorer_url {
         println!(
-            "Explorer:   {}",
-            format!("{}/tx/0x{}", explorer, tx_hash_hex).blue().underline()
+            "  {} {}",
+            "Explorer:   ".truecolor(120, 120, 120),
+            format!("{}/tx/0x{}", explorer, tx_hash_hex)
+                .truecolor(100, 149, 237)
+                .underline()
         );
     }
 
     println!();
-    println!("{}", "─".repeat(50));
+    ui::divider_double(55);
     println!(
-        "{} sent to {}",
+        "  {} {} sent to {}",
+        "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
         format_eth(amount_wei).green().bold(),
         format!("{:?}", recipient_address).bright_white()
     );
     println!(
-        "New private balance: {}",
-        format_eth(account_updated.balance).bright_white()
+        "  New private balance: {}",
+        format_eth(account_updated.balance)
+            .truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+            .bold()
     );
+    ui::divider_double(55);
+    println!();
 
     info!("Withdrawal of {} wei completed", amount_wei);
 

@@ -13,12 +13,20 @@ use tracing_subscriber::EnvFilter;
 
 pub mod commands;
 pub mod config;
+pub mod ui;
 pub mod wallet;
 
 #[derive(Parser)]
 #[command(name = "veilocity")]
 #[command(about = "Private execution layer CLI for Mantle")]
 #[command(version)]
+#[command(before_help = "\x1b[1;38;2;255;140;0m██╗   ██╗███████╗██╗██╗      ██████╗  ██████╗██╗████████╗██╗   ██╗
+██║   ██║██╔════╝██║██║     ██╔═══██╗██╔════╝██║╚══██╔══╝╚██╗ ██╔╝
+██║   ██║█████╗  ██║██║     ██║   ██║██║     ██║   ██║    ╚████╔╝
+╚██╗ ██╔╝██╔══╝  ██║██║     ██║   ██║██║     ██║   ██║     ╚██╔╝
+ ╚████╔╝ ███████╗██║███████╗╚██████╔╝╚██████╗██║   ██║      ██║
+  ╚═══╝  ╚══════╝╚═╝╚══════╝ ╚═════╝  ╚═════╝╚═╝   ╚═╝      ╚═╝\x1b[0m
+")]
 #[command(after_help = "Examples:
   veilocity init                    Create a new wallet
   veilocity deposit 0.1             Deposit 0.1 ETH

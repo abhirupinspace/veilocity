@@ -1,6 +1,7 @@
 //! History command - show transaction history
 
 use crate::config::Config;
+use crate::ui;
 use crate::wallet::{format_eth, WalletManager};
 use anyhow::{anyhow, Result};
 use colored::Colorize;
@@ -19,22 +20,32 @@ pub async fn run(config: &Config) -> Result<()> {
     let wallet = wallet_manager.load_wallet()?;
 
     println!();
-    println!("{}", "═══ Transaction History ═══".cyan().bold());
-    println!("Wallet: {}", wallet.address.bright_white());
+    println!("{}", ui::header("Transaction History"));
+    println!();
     println!(
-        "Veilocity PubKey: {}...",
-        &wallet.veilocity_pubkey[..20].dimmed()
+        "  {} {}",
+        "Wallet:".truecolor(120, 120, 120),
+        wallet.address.bright_white()
     );
-    println!("{}", "─".repeat(60));
+    println!(
+        "  {} {}...",
+        "PubKey:".truecolor(120, 120, 120),
+        &wallet.veilocity_pubkey[..24].truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+
+    ui::divider(65);
 
     // Try to load state and get transactions
     let db_path = config.db_path();
     if !db_path.exists() {
         println!();
-        println!("{}", "(No transactions found)".yellow());
         println!(
-            "{}",
-            "Note: Run 'veilocity sync' to synchronize with the network.".dimmed()
+            "  {}",
+            "(No transactions found)".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+        );
+        println!(
+            "  {}",
+            "Run 'veilocity sync' to synchronize with the network.".dimmed()
         );
         print_help();
         return Ok(());
@@ -45,9 +56,12 @@ pub async fn run(config: &Config) -> Result<()> {
 
     if transactions.is_empty() {
         println!();
-        println!("{}", "(No transactions found)".yellow());
         println!(
-            "{}",
+            "  {}",
+            "(No transactions found)".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+        );
+        println!(
+            "  {}",
             "Make deposits, transfers, or withdrawals to see them here.".dimmed()
         );
         print_help();
@@ -57,20 +71,20 @@ pub async fn run(config: &Config) -> Result<()> {
     // Print header
     println!();
     println!(
-        "{:<12} {:<18} {:<12} {:<20}",
-        "Type".bold(),
-        "Amount".bold(),
-        "Status".bold(),
-        "Time".bold()
+        "  {:<12} {:<18} {:<12} {:<20}",
+        "Type".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
+        "Amount".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
+        "Status".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
+        "Time".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold()
     );
-    println!("{}", "─".repeat(60));
+    ui::divider(65);
 
     // Print transactions
     for tx in transactions {
         let tx_type = match tx.tx_type.as_str() {
-            "deposit" => "DEPOSIT".green(),
+            "deposit" => "DEPOSIT".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
             "withdraw" => "WITHDRAW".red(),
-            "transfer" => "TRANSFER".blue(),
+            "transfer" => "TRANSFER".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2),
             _ => tx.tx_type.normal(),
         };
 
@@ -88,15 +102,22 @@ pub async fn run(config: &Config) -> Result<()> {
 
         let time = format_timestamp(tx.created_at);
 
-        println!("{:<12} {:<18} {:<12} {:<20}", tx_type, amount, status, time);
+        println!(
+            "  {:<12} {:<18} {:<12} {:<20}",
+            tx_type, amount, status, time
+        );
 
         // Show tx hash if available
         if let Some(hash) = tx.tx_hash() {
-            println!("  {} 0x{}...", "→".dimmed(), &hash[..16].dimmed());
+            println!(
+                "    {} 0x{}...",
+                "→".truecolor(80, 80, 80),
+                &hash[..16].dimmed()
+            );
         }
     }
 
-    println!("{}", "─".repeat(60));
+    ui::divider(65);
     print_help();
 
     Ok(())
@@ -126,34 +147,36 @@ fn format_timestamp(timestamp: u64) -> String {
 
 fn print_help() {
     println!();
-    println!("{}", "═══ Quick Commands ═══".cyan());
+    println!("{}", ui::header("Quick Commands"));
+    println!();
     println!(
         "  {} {} {}",
-        "veilocity deposit".green(),
+        ui::command("veilocity deposit"),
         "<amount>".dimmed(),
-        "- Deposit funds"
+        "- Deposit funds".truecolor(120, 120, 120)
     );
     println!(
         "  {} {} {} {}",
-        "veilocity transfer".blue(),
+        ui::command("veilocity transfer"),
         "<recipient>".dimmed(),
         "<amount>".dimmed(),
-        "- Private transfer"
+        "- Private transfer".truecolor(120, 120, 120)
     );
     println!(
         "  {} {} {}",
-        "veilocity withdraw".red(),
+        ui::command("veilocity withdraw"),
         "<amount>".dimmed(),
-        "- Withdraw funds"
+        "- Withdraw funds".truecolor(120, 120, 120)
     );
     println!(
         "  {} {}",
-        "veilocity balance".bright_white(),
-        "- Check balance"
+        ui::command("veilocity balance"),
+        "- Check balance".truecolor(120, 120, 120)
     );
     println!(
         "  {} {}",
-        "veilocity sync".yellow(),
-        "- Sync with network"
+        ui::command("veilocity sync"),
+        "- Sync with network".truecolor(120, 120, 120)
     );
+    println!();
 }

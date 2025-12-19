@@ -6,6 +6,7 @@
 //! - Tracks sync checkpoint for incremental updates
 
 use crate::config::Config;
+use crate::ui;
 use crate::wallet::WalletManager;
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
@@ -29,10 +30,9 @@ pub async fn run(config: &Config) -> Result<()> {
     // Check vault address is configured
     if config.network.vault_address.is_empty() {
         println!();
-        println!("{}", "⚠ Vault address not configured.".yellow());
-        println!(
-            "{}",
-            "Skipping on-chain sync. Update your config with the deployed vault address.".dimmed()
+        ui::print_notice(
+            "Vault Not Configured",
+            "Skipping on-chain sync. Update your config with the deployed vault address.",
         );
         return Ok(());
     }
@@ -44,8 +44,13 @@ pub async fn run(config: &Config) -> Result<()> {
         .context("Invalid vault address")?;
 
     println!();
-    println!("{}", "═══ Syncing with Network ═══".cyan().bold());
-    println!("Network: {}", config.network.rpc_url.dimmed());
+    println!("{}", ui::header("Syncing with Network"));
+    println!();
+    println!(
+        "  {} {}",
+        "Network:".truecolor(120, 120, 120),
+        config.network.rpc_url.dimmed()
+    );
 
     // Create read-only vault client
     let vault = create_vault_reader(&config.network.rpc_url, vault_address)?;
@@ -57,15 +62,26 @@ pub async fn run(config: &Config) -> Result<()> {
     let tvl = vault.total_value_locked().await?;
 
     println!();
-    println!("{}", "═══ On-chain State ═══".cyan());
-    println!("Block Number:  {}", current_block.to_string().bright_white());
+    println!("{}", ui::header("On-chain State"));
+    println!();
     println!(
-        "State Root:    0x{}...",
+        "  {} {}",
+        "Block Number: ".truecolor(120, 120, 120),
+        current_block.to_string().bright_white()
+    );
+    println!(
+        "  {} 0x{}...",
+        "State Root:   ".truecolor(120, 120, 120),
         &hex::encode(on_chain_root)[..16].dimmed()
     );
-    println!("Deposit Count: {}", deposit_count.to_string().bright_white());
     println!(
-        "TVL:           {} {}",
+        "  {} {}",
+        "Deposit Count:".truecolor(120, 120, 120),
+        deposit_count.to_string().truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!(
+        "  {} {} {}",
+        "TVL:          ".truecolor(120, 120, 120),
         format!("{:.6} ETH", tvl.to::<u128>() as f64 / 1e18).green(),
         format!("({} wei)", tvl).dimmed()
     );
@@ -81,28 +97,37 @@ pub async fn run(config: &Config) -> Result<()> {
     let last_synced_block = state.get_sync_checkpoint().unwrap_or(deployment_block);
 
     println!();
-    println!("{}", "═══ Local State ═══".cyan());
+    println!("{}", ui::header("Local State"));
+    println!();
     println!(
-        "Local Root:      0x{}...",
+        "  {} 0x{}...",
+        "Local Root:     ".truecolor(120, 120, 120),
         &hex::encode(field_to_bytes(&state.state_root()))[..16].dimmed()
     );
-    println!("Local Leaves:    {}", state.leaf_count().to_string().bright_white());
-    println!("Last Sync Block: {}", last_synced_block.to_string().bright_white());
+    println!(
+        "  {} {}",
+        "Local Leaves:   ".truecolor(120, 120, 120),
+        state.leaf_count().to_string().bright_white()
+    );
+    println!(
+        "  {} {}",
+        "Last Sync Block:".truecolor(120, 120, 120),
+        last_synced_block.to_string().bright_white()
+    );
 
     // Check if we need to sync
     let local_root_bytes = field_to_bytes(&state.state_root());
     if local_root_bytes == on_chain_root.0 {
         println!();
-        println!("{}", "✓ Local state is in sync with on-chain state.".green().bold());
+        ui::print_success("Local state is in sync with on-chain state.");
         return Ok(());
     }
 
     println!();
-    println!(
-        "{}",
-        "⚠ Local state differs from on-chain state.".yellow()
+    ui::print_notice(
+        "State Mismatch",
+        "Local state differs from on-chain. Fetching new events...",
     );
-    println!("{}", "  Fetching new events...".dimmed());
 
     // Fetch and process events in batches
     let mut from_block = last_synced_block + 1;
@@ -118,8 +143,10 @@ pub async fn run(config: &Config) -> Result<()> {
         let events = vault.get_all_events(&filter).await?;
 
         if !events.is_empty() {
+            println!();
             println!(
-                "Processing {} events from blocks {}-{}...",
+                "  {} Processing {} events from blocks {}-{}...",
+                "◐".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
                 events.len().to_string().bright_white(),
                 from_block,
                 to_block
@@ -132,10 +159,11 @@ pub async fn run(config: &Config) -> Result<()> {
                     process_deposit(&mut state, &deposit)?;
                     total_deposits_processed += 1;
                     println!(
-                        "  {} Deposit #{}: {} (tx: 0x{}...)",
+                        "    {} Deposit #{}: {} (tx: 0x{}...)",
                         "✓".green(),
                         deposit.leaf_index,
-                        format!("{} ETH", deposit.amount_eth()).green(),
+                        format!("{} ETH", deposit.amount_eth())
+                            .truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
                         &hex::encode(deposit.tx_hash)[..8].dimmed()
                     );
                 }
@@ -146,10 +174,10 @@ pub async fn run(config: &Config) -> Result<()> {
                         state.mark_nullifier_used(&nullifier_bytes)?;
                         total_withdrawals_processed += 1;
                         println!(
-                            "  {} Withdrawal: {} to {:?} (tx: 0x{}...)",
-                            "✓".red(),
+                            "    {} Withdrawal: {} to {} (tx: 0x{}...)",
+                            "↑".red(),
                             format!("{} ETH", withdrawal.amount_eth()).red(),
-                            withdrawal.recipient,
+                            ui::format_address(&format!("{:?}", withdrawal.recipient)),
                             &hex::encode(withdrawal.tx_hash)[..8].dimmed()
                         );
                     }
@@ -171,21 +199,26 @@ pub async fn run(config: &Config) -> Result<()> {
 
     // Final status
     println!();
-    println!("{}", "═══ Sync Complete ═══".cyan().bold());
+    println!("{}", ui::header("Sync Complete"));
+    println!();
     println!(
-        "Deposits processed:    {}",
-        total_deposits_processed.to_string().green()
+        "  {} {}",
+        "Deposits processed:   ".truecolor(120, 120, 120),
+        total_deposits_processed.to_string().truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
     );
     println!(
-        "Withdrawals processed: {}",
+        "  {} {}",
+        "Withdrawals processed:".truecolor(120, 120, 120),
         total_withdrawals_processed.to_string().red()
     );
     println!(
-        "New local root:        0x{}...",
+        "  {} 0x{}...",
+        "New local root:       ".truecolor(120, 120, 120),
         &hex::encode(field_to_bytes(&state.state_root()))[..16].dimmed()
     );
     println!(
-        "Synced to block:       {}",
+        "  {} {}",
+        "Synced to block:      ".truecolor(120, 120, 120),
         current_block.to_string().bright_white()
     );
 
@@ -193,23 +226,24 @@ pub async fn run(config: &Config) -> Result<()> {
     let new_local_root = field_to_bytes(&state.state_root());
     if new_local_root == on_chain_root.0 {
         println!();
-        println!(
-            "{}",
-            "✓ Successfully synced with on-chain state!".green().bold()
-        );
+        ui::print_success("Successfully synced with on-chain state!");
     } else {
         println!();
-        println!(
-            "{}",
-            "⚠ Warning: Local root still differs from on-chain.".yellow()
+        ui::print_notice(
+            "Root Mismatch",
+            "Local root still differs from on-chain. May indicate pending updates.",
         );
         println!(
-            "{}",
-            "  This may indicate pending state updates or missing events.".dimmed()
+            "    On-chain: 0x{}...",
+            &hex::encode(on_chain_root)[..16]
         );
-        println!("  On-chain: 0x{}...", &hex::encode(on_chain_root)[..16]);
-        println!("  Local:    0x{}...", &hex::encode(new_local_root)[..16]);
+        println!(
+            "    Local:    0x{}...",
+            &hex::encode(new_local_root)[..16]
+        );
     }
+
+    println!();
 
     info!(
         "Sync completed: {} deposits, {} withdrawals, block {}",
@@ -273,8 +307,12 @@ pub async fn watch(config: &Config) -> Result<()> {
 
     let vault = create_vault_reader(&config.network.rpc_url, vault_address)?;
 
-    println!("Watching for new events...");
-    println!("Press Ctrl+C to stop.\n");
+    println!(
+        "{} Watching for new events...",
+        "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!("{}", "Press Ctrl+C to stop.".dimmed());
+    println!();
 
     let db_path = config.db_path();
     let mut state = StateManager::new(&db_path)?;
@@ -292,7 +330,8 @@ pub async fn watch(config: &Config) -> Result<()> {
                 match event {
                     VeilocityEvent::Deposit(deposit) => {
                         println!(
-                            "[Block {}] New deposit: {} ETH (index {})",
+                            "  {} [Block {}] Deposit: {} ETH (index {})",
+                            "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
                             deposit.block_number,
                             deposit.amount_eth(),
                             deposit.leaf_index
@@ -301,7 +340,8 @@ pub async fn watch(config: &Config) -> Result<()> {
                     }
                     VeilocityEvent::Withdrawal(withdrawal) => {
                         println!(
-                            "[Block {}] Withdrawal: {} ETH to {:?}",
+                            "  {} [Block {}] Withdrawal: {} ETH to {:?}",
+                            "↑".red(),
                             withdrawal.block_number,
                             withdrawal.amount_eth(),
                             withdrawal.recipient
@@ -313,8 +353,10 @@ pub async fn watch(config: &Config) -> Result<()> {
                     }
                     VeilocityEvent::StateRootUpdated(update) => {
                         println!(
-                            "[Block {}] State root updated (batch {})",
-                            update.block_number, update.batch_index
+                            "  {} [Block {}] State root updated (batch {})",
+                            "⟲".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2),
+                            update.block_number,
+                            update.batch_index
                         );
                     }
                 }

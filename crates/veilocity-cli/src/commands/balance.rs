@@ -1,6 +1,7 @@
 //! Balance command - display current private balance
 
 use crate::config::Config;
+use crate::ui;
 use crate::wallet::{format_eth, WalletManager};
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -15,31 +16,31 @@ pub async fn run(config: &Config) -> Result<()> {
     let wallet = wallet_manager.load_wallet()?;
 
     // Get password
-    let password = rpassword::prompt_password("Enter wallet password: ")
-        .context("Failed to read password")?;
+    let password = rpassword::prompt_password(format!(
+        "{} ",
+        "Enter wallet password:".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    ))
+    .context("Failed to read password")?;
 
     // Get Veilocity secret
     let veilocity_secret = wallet_manager.get_veilocity_secret(&wallet, &password)?;
 
     println!();
-    println!("{}", "═══ Veilocity Balance ═══".cyan().bold());
+    println!("{}", ui::header("Balance"));
 
     // Try to load state
     let db_path = config.db_path();
     if !db_path.exists() {
         println!();
         println!(
-            "Private Balance: {}",
+            "  {} {}",
+            "Private Balance:".truecolor(150, 150, 150),
             "0.000000 ETH".bright_white().bold()
         );
         println!();
-        println!(
-            "{}",
-            "Note: No local state found.".yellow()
-        );
-        println!(
-            "Run '{}' to sync with the network.",
-            "veilocity sync".cyan()
+        ui::print_notice(
+            "No Local State",
+            &format!("Run '{}' to sync with the network.", ui::command("veilocity sync")),
         );
         return Ok(());
     }
@@ -55,39 +56,74 @@ pub async fn run(config: &Config) -> Result<()> {
 
     println!();
     if let Some(account) = account {
+        // Main balance display
+        let balance_str = format_eth(account.balance);
         println!(
-            "Private Balance: {}",
-            format_eth(account.balance).green().bold()
+            "  {} {}",
+            "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
+            "Private Balance".truecolor(150, 150, 150)
         );
         println!();
-        println!("{}", "Account Details".dimmed());
-        println!("  Leaf Index: {}", account.index.to_string().bright_white());
-        println!("  Nonce:      {}", account.nonce.to_string().bright_white());
+        println!(
+            "    {}",
+            balance_str.truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold()
+        );
+        println!();
+
+        ui::divider(45);
+        println!();
+        println!(
+            "  {} {}",
+            "Leaf Index:".truecolor(120, 120, 120),
+            account.index.to_string().bright_white()
+        );
+        println!(
+            "  {} {}",
+            "Nonce:     ".truecolor(120, 120, 120),
+            account.nonce.to_string().bright_white()
+        );
     } else {
         println!(
-            "Private Balance: {}",
-            "0.000000 ETH".bright_white().bold()
+            "  {} {}",
+            "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
+            "Private Balance".truecolor(150, 150, 150)
         );
         println!();
-        println!("{}", "No deposits found for this wallet.".yellow());
+        println!("    {}", "0.000000 ETH".bright_white().bold());
+        println!();
+        println!(
+            "  {}",
+            "No deposits found for this wallet.".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+        );
     }
 
     // Show state info
     println!();
-    println!("{}", "═══ State Info ═══".cyan());
+    println!("{}", ui::header("State Info"));
+    println!();
     println!(
-        "State Root:   0x{}...",
+        "  {} 0x{}...",
+        "State Root:  ".truecolor(120, 120, 120),
         &hex::encode(field_to_bytes(&state.state_root()))[..16].dimmed()
     );
-    println!("Total Leaves: {}", state.leaf_count().to_string().bright_white());
-    println!("Network:      {}", config.network.rpc_url.dimmed());
+    println!(
+        "  {} {}",
+        "Total Leaves:".truecolor(120, 120, 120),
+        state.leaf_count().to_string().bright_white()
+    );
+    println!(
+        "  {} {}",
+        "Network:     ".truecolor(120, 120, 120),
+        config.network.rpc_url.dimmed()
+    );
 
     println!();
-    println!("{}", "─".repeat(40));
+    ui::divider(45);
     println!(
-        "Run '{}' to update your local state.",
-        "veilocity sync".cyan()
+        "  Run '{}' to update your local state.",
+        ui::command("veilocity sync")
     );
+    println!();
 
     Ok(())
 }

@@ -1,6 +1,7 @@
 //! Initialize command - create a new Veilocity wallet
 
 use crate::config::{get_data_dir, Config};
+use crate::ui;
 use crate::wallet::WalletManager;
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
@@ -35,17 +36,23 @@ pub async fn run(recover: bool) -> Result<()> {
 
     let wallet_manager = WalletManager::new(config.clone());
 
+    // Print logo
     println!();
-    println!("{}", "═══ Veilocity Wallet Setup ═══".cyan().bold());
+    ui::print_logo();
+    println!(
+        "{}",
+        "  Private Execution Layer for Mantle"
+            .truecolor(180, 180, 180)
+            .italic()
+    );
+    println!();
 
     // Check if wallet already exists
     if wallet_manager.wallet_exists() {
-        println!();
-        println!(
-            "{} Wallet already exists at:",
-            "⚠".yellow()
+        ui::print_notice(
+            "Wallet Already Exists",
+            &format!("Location: {:?}", wallet_manager.wallet_path()),
         );
-        println!("  {:?}", wallet_manager.wallet_path());
         println!();
         println!(
             "{}",
@@ -55,44 +62,62 @@ pub async fn run(recover: bool) -> Result<()> {
     }
 
     if recover {
-        println!();
-        println!(
-            "{}",
-            "Recovery from seed phrase is not yet implemented.".yellow()
+        ui::print_notice(
+            "Recovery Not Available",
+            "Seed phrase recovery is not yet implemented.",
         );
         println!("{}", "Please create a new wallet for now.".dimmed());
         return Ok(());
     }
 
+    println!("{}", ui::header("Wallet Setup"));
     println!();
     println!("{}", "Password Requirements:".bold());
-    println!("  • At least 8 characters");
-    println!("  • Mix of uppercase and lowercase letters");
-    println!("  • At least one number");
+    println!(
+        "  {} At least 8 characters",
+        "•".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!(
+        "  {} Mix of uppercase and lowercase letters",
+        "•".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!(
+        "  {} At least one number",
+        "•".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
     println!();
 
     // Get password from user
-    let password = rpassword::prompt_password("Enter password for new wallet: ")
-        .context("Failed to read password")?;
+    let password = rpassword::prompt_password(format!(
+        "{} ",
+        "Enter password for new wallet:".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    ))
+    .context("Failed to read password")?;
 
     // Validate password strength
     if let Err(e) = validate_password(&password) {
         println!();
-        println!("{} {}", "Error:".red().bold(), e);
+        println!("{} {}", ui::error("Error:"), e);
         return Ok(());
     }
 
-    let password_confirm = rpassword::prompt_password("Confirm password: ")
-        .context("Failed to read password confirmation")?;
+    let password_confirm = rpassword::prompt_password(format!(
+        "{} ",
+        "Confirm password:".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    ))
+    .context("Failed to read password confirmation")?;
 
     if password != password_confirm {
         println!();
-        println!("{}", "✗ Passwords do not match!".red().bold());
+        println!("{}", ui::error("✗ Passwords do not match!"));
         return Ok(());
     }
 
     println!();
-    println!("{}", "Creating new Veilocity wallet...".yellow());
+    println!(
+        "{} Creating new Veilocity wallet...",
+        "◐".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
 
     // Generate wallet
     let (wallet, _signer, _secret) = wallet_manager.generate(&password)?;
@@ -103,48 +128,61 @@ pub async fn run(recover: bool) -> Result<()> {
     // Save config
     config.save()?;
 
+    ui::print_success("Wallet created successfully!");
     println!();
-    println!("{}", "✓ Wallet created successfully!".green().bold());
+    println!("{}", ui::header("Wallet Information"));
     println!();
-    println!("{}", "═══ Wallet Information ═══".cyan());
     println!(
-        "Ethereum Address:     {}",
-        wallet.address.bright_white().bold()
+        "  {} {}",
+        "Ethereum Address:    ".truecolor(150, 150, 150),
+        ui::value(&wallet.address)
     );
     println!(
-        "Veilocity Public Key: {}",
-        wallet.veilocity_pubkey.bright_white()
+        "  {} {}",
+        "Veilocity Public Key:".truecolor(150, 150, 150),
+        ui::orange(&wallet.veilocity_pubkey)
     );
-    println!("Data Directory:       {}", format!("{:?}", data_dir).dimmed());
+    println!(
+        "  {} {}",
+        "Data Directory:      ".truecolor(150, 150, 150),
+        format!("{:?}", data_dir).dimmed()
+    );
 
     println!();
-    println!("{}", "─".repeat(50));
+    ui::divider_double(54);
     println!(
-        "{}",
-        "⚠ IMPORTANT: Keep your password safe!".yellow().bold()
+        "  {} {}",
+        "⚠".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
+        "IMPORTANT: Keep your password safe!".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold()
     );
     println!(
-        "{}",
-        "  There is no way to recover your wallet without it.".yellow()
+        "    {}",
+        "There is no way to recover your wallet without it.".dimmed()
     );
-    println!("{}", "─".repeat(50));
+    ui::divider_double(54);
 
     println!();
-    println!("{}", "═══ Next Steps ═══".cyan());
+    println!("{}", ui::header("Next Steps"));
+    println!();
     println!(
-        "  {} Fund your Ethereum address with MNT (Mantle native token)",
-        "1.".bold()
+        "  {}",
+        ui::step(1, "Fund your Ethereum address with MNT (Mantle native token)")
     );
     println!(
-        "  {} Use '{}' to deposit into Veilocity",
-        "2.".bold(),
-        "veilocity deposit <amount>".green()
+        "  {}",
+        ui::step(
+            2,
+            &format!("Use '{}' to deposit into Veilocity", ui::command("veilocity deposit <amount>"))
+        )
     );
     println!(
-        "  {} Use '{}' to check your private balance",
-        "3.".bold(),
-        "veilocity balance".green()
+        "  {}",
+        ui::step(
+            3,
+            &format!("Use '{}' to check your private balance", ui::command("veilocity balance"))
+        )
     );
+    println!();
 
     info!("Wallet initialized successfully");
 
