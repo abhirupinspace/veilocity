@@ -14,9 +14,9 @@ name = "veilocity"
 path = "src/main.rs"
 
 [dependencies]
-veilocity-core = { path = "../veilocity-core", version = "0.1.1" }
-veilocity-prover = { path = "../veilocity-prover", version = "0.1.1" }
-veilocity-contracts = { path = "../veilocity-contracts", version = "0.1.1" }
+veilocity-core = { path = "../veilocity-core", version = "0.1.2" }
+veilocity-prover = { path = "../veilocity-prover", version = "0.1.2" }
+veilocity-contracts = { path = "../veilocity-contracts", version = "0.1.2" }
 
 clap.workspace = true
 tokio.workspace = true

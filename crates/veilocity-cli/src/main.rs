@@ -34,7 +34,9 @@ pub mod wallet;
   veilocity withdraw 0.1            Withdraw 0.1 ETH
   veilocity balance                 Check your balance
   veilocity sync                    Sync with network
-  veilocity history                 View transaction history")]
+  veilocity history                 View transaction history
+  veilocity config                  Show current configuration
+  veilocity config set vault <addr> Set vault contract address")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -108,6 +110,20 @@ enum Commands {
     /// Show transaction history
     #[command(alias = "h", alias = "hist")]
     History,
+
+    /// View or update configuration
+    #[command(alias = "cfg")]
+    Config {
+        /// Set a config value: set <key> <value>
+        #[arg(value_name = "ACTION")]
+        action: Option<String>,
+        /// Config key to set
+        #[arg(value_name = "KEY")]
+        key: Option<String>,
+        /// Config value to set
+        #[arg(value_name = "VALUE")]
+        value: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -145,6 +161,20 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::History => {
             commands::history::run(&config).await
+        }
+        Commands::Config { action, key, value } => {
+            let config_action = match action.as_deref() {
+                Some("set") => {
+                    let k = key.ok_or_else(|| anyhow::anyhow!("Missing key. Usage: veilocity config set <key> <value>"))?;
+                    let v = value.ok_or_else(|| anyhow::anyhow!("Missing value. Usage: veilocity config set <key> <value>"))?;
+                    commands::config::ConfigAction::Set { key: k, value: v }
+                }
+                Some(other) => {
+                    return Err(anyhow::anyhow!("Unknown action '{}'. Use 'set' or omit for showing config.", other));
+                }
+                None => commands::config::ConfigAction::Show,
+            };
+            commands::config::run(config_action).await
         }
     };
 
