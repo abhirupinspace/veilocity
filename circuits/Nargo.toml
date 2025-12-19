@@ -1,9 +1,8 @@
 [package]
 name = "veilocity_circuits"
-type = "lib"
+type = "bin"
 authors = ["Veilocity Team"]
-compiler_version = ">=1.0.0-beta.16"
 
 [dependencies]
 # Poseidon hash library (BN254 compatible)
-# Note: Noir's std library includes poseidon, so explicit dependency may not be needed
+poseidon = { tag = "v0.1.1", git = "https://github.com/noir-lang/poseidon" }

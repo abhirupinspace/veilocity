@@ -4,6 +4,7 @@ use crate::config::Config;
 use crate::wallet::{format_eth, parse_eth, WalletManager};
 use alloy::primitives::{Address, B256, U256};
 use anyhow::{anyhow, Context, Result};
+use colored::Colorize;
 use std::path::PathBuf;
 use tracing::info;
 use veilocity_contracts::create_vault_client;
@@ -12,7 +13,7 @@ use veilocity_core::state::StateManager;
 use veilocity_prover::{NoirProver, WithdrawWitness};
 
 /// Run the withdraw command
-pub async fn run(config: &Config, amount: f64, recipient: Option<String>) -> Result<()> {
+pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_run: bool) -> Result<()> {
     let wallet_manager = WalletManager::new(config.clone());
 
     // Load wallet
@@ -49,9 +50,15 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>) -> Res
     // Parse amount
     let amount_wei = parse_eth(amount);
 
-    println!("\n=== Withdrawal Details ===");
-    println!("Amount: {} ({} wei)", format_eth(amount_wei), amount_wei);
-    println!("Recipient: {:?}", recipient_address);
+    println!();
+    println!("{}", "═══ Withdrawal Details ═══".red().bold());
+    println!(
+        "Amount:    {} {}",
+        format_eth(amount_wei).bright_white().bold(),
+        format!("({} wei)", amount_wei).dimmed()
+    );
+    println!("Recipient: {}", format!("{:?}", recipient_address).bright_white());
+    println!("Network:   {}", config.network.rpc_url.dimmed());
 
     // Load state
     let mut state = StateManager::new(&config.db_path())
@@ -75,7 +82,11 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>) -> Res
         ));
     }
 
-    println!("Current private balance: {}", format_eth(account.balance));
+    println!(
+        "Balance:   {} {}",
+        format_eth(account.balance).green(),
+        "(private)".dimmed()
+    );
 
     // Get Merkle proof
     let merkle_path = state.get_merkle_proof(account.index);
@@ -111,19 +122,32 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>) -> Res
         merkle_path_fields,
     )?;
 
-    println!("\nGenerating withdrawal proof... (this may take a moment)");
+    if dry_run {
+        println!();
+        println!("{}", "DRY RUN - No transaction submitted".yellow().bold());
+        println!("{}", "Proof would be generated and withdrawal submitted.".dimmed());
+        println!("{}", "Remove --dry-run to execute the withdrawal.".dimmed());
+        return Ok(());
+    }
+
+    println!();
+    println!("{}", "Generating withdrawal proof...".yellow());
+    println!("{}", "(this may take a moment)".dimmed());
 
     // Generate proof
     let prover = NoirProver::new(PathBuf::from("circuits"));
 
     if !prover.is_compiled() {
-        println!("Circuits not compiled. Compiling...");
+        println!("{}", "Compiling circuits...".yellow());
         prover.compile().await?;
     }
 
     let proof = prover.prove_withdraw(&witness).await?;
 
-    println!("Proof generated ({} bytes)", proof.len());
+    println!(
+        "{}",
+        format!("✓ Proof generated ({} bytes)", proof.len()).green()
+    );
 
     // Create vault client
     let vault = create_vault_client(&config.network.rpc_url, vault_address, signer).await?;
@@ -135,11 +159,14 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>) -> Res
 
     // Check if root is valid on-chain
     if !vault.is_valid_root(B256::from(state_root_bytes)).await? {
-        println!("Warning: State root may be outdated. Syncing...");
-        // In production, trigger a sync here
+        println!(
+            "{}",
+            "⚠ Warning: State root may be outdated. Consider running 'veilocity sync'.".yellow()
+        );
     }
 
-    println!("\nSubmitting withdrawal transaction...");
+    println!();
+    println!("{}", "Submitting withdrawal transaction...".yellow());
 
     // Submit withdrawal
     let tx_hash = vault
@@ -152,6 +179,8 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>) -> Res
         )
         .await?;
 
+    let tx_hash_hex = hex::encode(tx_hash);
+
     // Update local state
     let mut account_updated = account.clone();
     account_updated.balance -= amount_wei;
@@ -159,15 +188,37 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>) -> Res
     state.update_account(&account_updated)?;
     state.mark_nullifier_used(&nullifier_bytes)?;
 
-    println!("\nWithdrawal successful!");
-    println!("Transaction hash: 0x{}", hex::encode(tx_hash));
+    // Record transaction
+    let _ = state.record_transaction(
+        "withdraw",
+        amount_wei,
+        Some(tx_hash.as_slice()),
+        Some(&format!("{:?}", recipient_address)),
+        "confirmed",
+    );
+
+    println!();
+    println!("{}", "✓ Withdrawal successful!".green().bold());
+    println!("Transaction: 0x{}", tx_hash_hex.bright_white());
 
     if let Some(explorer) = &config.network.explorer_url {
-        println!("View on explorer: {}/tx/0x{}", explorer, hex::encode(tx_hash));
+        println!(
+            "Explorer:   {}",
+            format!("{}/tx/0x{}", explorer, tx_hash_hex).blue().underline()
+        );
     }
 
-    println!("\n{} has been sent to {:?}", format_eth(amount_wei), recipient_address);
-    println!("New private balance: {}", format_eth(account_updated.balance));
+    println!();
+    println!("{}", "─".repeat(50));
+    println!(
+        "{} sent to {}",
+        format_eth(amount_wei).green().bold(),
+        format!("{:?}", recipient_address).bright_white()
+    );
+    println!(
+        "New private balance: {}",
+        format_eth(account_updated.balance).bright_white()
+    );
 
     info!("Withdrawal of {} wei completed", amount_wei);
 

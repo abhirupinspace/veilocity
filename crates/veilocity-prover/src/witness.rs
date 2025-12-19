@@ -240,7 +240,9 @@ amount = "{}""#,
     }
 }
 
-/// Full transfer witness with both sender and recipient paths
+/// Full transfer witness with old and new paths for both sender and recipient
+/// This is required for proper state transition verification:
+/// old_root -> (update sender) -> intermediate_root -> (update recipient) -> new_root
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FullTransferWitness {
     /// Public: Old state root
@@ -254,19 +256,33 @@ pub struct FullTransferWitness {
     pub sender_balance: String,
     pub sender_nonce: String,
     pub sender_index: String,
-    pub sender_path: Vec<String>,
+    /// Sender's Merkle path in OLD state (before any updates)
+    pub sender_path_old: Vec<String>,
+    /// Sender's Merkle path in NEW state (after recipient update)
+    pub sender_path_new: Vec<String>,
     /// Recipient data
     pub recipient_pubkey: String,
     pub recipient_balance: String,
     pub recipient_nonce: String,
     pub recipient_index: String,
-    pub recipient_path: Vec<String>,
+    /// Recipient's Merkle path in OLD state
+    pub recipient_path_old: Vec<String>,
+    /// Recipient's Merkle path in INTERMEDIATE state (after sender update)
+    pub recipient_path_new: Vec<String>,
     /// Transfer amount
     pub amount: String,
 }
 
 impl FullTransferWitness {
-    /// Create a new full transfer witness
+    /// Create a new full transfer witness with 4 Merkle paths
+    ///
+    /// The state transition is verified as:
+    /// 1. Verify sender exists in old_state_root using sender_path_old
+    /// 2. Verify recipient exists in old_state_root using recipient_path_old
+    /// 3. Update sender leaf -> intermediate_root
+    /// 4. Verify recipient's new path leads to intermediate_root using recipient_path_new
+    /// 5. Update recipient leaf -> new_state_root
+    /// 6. Verify sender's new path leads to new_state_root using sender_path_new
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         old_state_root: FieldElement,
@@ -276,25 +292,31 @@ impl FullTransferWitness {
         sender_balance: FieldElement,
         sender_nonce: FieldElement,
         sender_index: FieldElement,
-        sender_path: Vec<FieldElement>,
+        sender_path_old: Vec<FieldElement>,
+        sender_path_new: Vec<FieldElement>,
         recipient_pubkey: FieldElement,
         recipient_balance: FieldElement,
         recipient_nonce: FieldElement,
         recipient_index: FieldElement,
-        recipient_path: Vec<FieldElement>,
+        recipient_path_old: Vec<FieldElement>,
+        recipient_path_new: Vec<FieldElement>,
         amount: FieldElement,
     ) -> Result<Self, ProverError> {
-        if sender_path.len() != TREE_DEPTH {
-            return Err(ProverError::InvalidInput(format!(
-                "Sender path must have {} elements",
-                TREE_DEPTH
-            )));
-        }
-        if recipient_path.len() != TREE_DEPTH {
-            return Err(ProverError::InvalidInput(format!(
-                "Recipient path must have {} elements",
-                TREE_DEPTH
-            )));
+        // Validate all paths have correct length
+        for (name, path) in [
+            ("sender_path_old", &sender_path_old),
+            ("sender_path_new", &sender_path_new),
+            ("recipient_path_old", &recipient_path_old),
+            ("recipient_path_new", &recipient_path_new),
+        ] {
+            if path.len() != TREE_DEPTH {
+                return Err(ProverError::InvalidInput(format!(
+                    "{} must have {} elements, got {}",
+                    name,
+                    TREE_DEPTH,
+                    path.len()
+                )));
+            }
         }
 
         Ok(Self {
@@ -305,26 +327,40 @@ impl FullTransferWitness {
             sender_balance: field_to_hex(&sender_balance),
             sender_nonce: field_to_hex(&sender_nonce),
             sender_index: field_to_hex(&sender_index),
-            sender_path: sender_path.iter().map(field_to_hex).collect(),
+            sender_path_old: sender_path_old.iter().map(field_to_hex).collect(),
+            sender_path_new: sender_path_new.iter().map(field_to_hex).collect(),
             recipient_pubkey: field_to_hex(&recipient_pubkey),
             recipient_balance: field_to_hex(&recipient_balance),
             recipient_nonce: field_to_hex(&recipient_nonce),
             recipient_index: field_to_hex(&recipient_index),
-            recipient_path: recipient_path.iter().map(field_to_hex).collect(),
+            recipient_path_old: recipient_path_old.iter().map(field_to_hex).collect(),
+            recipient_path_new: recipient_path_new.iter().map(field_to_hex).collect(),
             amount: field_to_hex(&amount),
         })
     }
 
-    /// Convert to Prover.toml format
+    /// Convert to Prover.toml format matching the Noir circuit signature
     pub fn to_toml(&self) -> String {
-        let sender_path_str = self
-            .sender_path
+        let sender_path_old_str = self
+            .sender_path_old
             .iter()
             .map(|p| format!("\"{}\"", p))
             .collect::<Vec<_>>()
             .join(", ");
-        let recipient_path_str = self
-            .recipient_path
+        let sender_path_new_str = self
+            .sender_path_new
+            .iter()
+            .map(|p| format!("\"{}\"", p))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let recipient_path_old_str = self
+            .recipient_path_old
+            .iter()
+            .map(|p| format!("\"{}\"", p))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let recipient_path_new_str = self
+            .recipient_path_new
             .iter()
             .map(|p| format!("\"{}\"", p))
             .collect::<Vec<_>>()
@@ -338,12 +374,14 @@ sender_secret = "{}"
 sender_balance = "{}"
 sender_nonce = "{}"
 sender_index = "{}"
-sender_path = [{}]
+sender_path_old = [{}]
+sender_path_new = [{}]
 recipient_pubkey = "{}"
 recipient_balance = "{}"
 recipient_nonce = "{}"
 recipient_index = "{}"
-recipient_path = [{}]
+recipient_path_old = [{}]
+recipient_path_new = [{}]
 amount = "{}""#,
             self.old_state_root,
             self.new_state_root,
@@ -352,14 +390,21 @@ amount = "{}""#,
             self.sender_balance,
             self.sender_nonce,
             self.sender_index,
-            sender_path_str,
+            sender_path_old_str,
+            sender_path_new_str,
             self.recipient_pubkey,
             self.recipient_balance,
             self.recipient_nonce,
             self.recipient_index,
-            recipient_path_str,
+            recipient_path_old_str,
+            recipient_path_new_str,
             self.amount
         )
+    }
+
+    /// Convert to JSON for bb prove
+    pub fn to_json(&self) -> Result<String, ProverError> {
+        serde_json::to_string_pretty(self).map_err(ProverError::from)
     }
 }
 

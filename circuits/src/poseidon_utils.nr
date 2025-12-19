@@ -1,21 +1,21 @@
 // Poseidon hash wrappers for consistent interface
 // These functions must produce identical outputs to the Rust implementation
 
-use std::hash::poseidon;
+use poseidon::poseidon::bn254::{hash_1, hash_2, hash_3};
 
 // Hash 2 field elements (for Merkle tree nodes)
 pub fn hash2(left: Field, right: Field) -> Field {
-    poseidon::bn254::hash_2([left, right])
+    hash_2([left, right])
 }
 
 // Hash 3 field elements (for account leaves)
 pub fn hash3(a: Field, b: Field, c: Field) -> Field {
-    poseidon::bn254::hash_3([a, b, c])
+    hash_3([a, b, c])
 }
 
 // Hash 1 field element
 pub fn hash1(a: Field) -> Field {
-    poseidon::bn254::hash_1([a])
+    hash_1([a])
 }
 
 // Compute public key from secret

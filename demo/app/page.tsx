@@ -1,15 +1,13 @@
 "use client";
 
-import { ConnectButton } from "@/components/connect-button";
+import Link from "next/link";
 import { VaultStats } from "@/components/vault-stats";
-import { DepositForm } from "@/components/deposit-form";
-import { RecentDeposits } from "@/components/recent-deposits";
-import { NetworkStatus } from "@/components/network-status";
+import { PrivateBalance } from "@/components/private-balance";
 import { useChainId } from "wagmi";
-import { Shield, ExternalLink, Github } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ExternalLink } from "lucide-react";
 import { VAULT_ADDRESSES } from "@/lib/abi";
 
-export default function Home() {
+export default function Dashboard() {
   const chainId = useChainId();
   const vaultAddress = VAULT_ADDRESSES[chainId];
   const explorerUrl =
@@ -18,112 +16,135 @@ export default function Home() {
       : "https://mantlescan.xyz";
 
   return (
-    <div className="min-h-screen grid-bg">
-      {/* Header */}
-      <header className="border-b border-border sticky top-0 z-40 bg-background/80 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Shield className="w-8 h-8 text-accent" />
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">Veilocity</h1>
-              <p className="text-xs text-muted-foreground font-mono">
-                Private Execution Layer
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <a
-              href="https://github.com/veilocity"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Github className="w-5 h-5" />
-            </a>
-            <ConnectButton />
-          </div>
-        </div>
-      </header>
+    <div className="space-y-12">
+      {/* Hero */}
+      <section>
+        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">
+          Private Execution Layer
+        </span>
+        <h1 className="mt-3 text-3xl md:text-4xl font-medium tracking-tight">
+          Dashboard
+        </h1>
+        <p className="mt-4 max-w-md font-mono text-sm text-muted-foreground leading-relaxed">
+          Manage your private balance and execute confidential transactions on Mantle.
+        </p>
+      </section>
 
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        {/* Network Warning */}
-        <NetworkStatus />
+      {/* Private Balance */}
+      <section className="card-minimal p-6 md:p-8">
+        <PrivateBalance />
+      </section>
 
-        {/* Hero */}
-        <section className="py-8">
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
-            Private transactions
-            <br />
-            <span className="text-accent">on Mantle</span>
-          </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl font-mono">
-            Execute confidential transactions with zero-knowledge proofs.
-            Deposit MNT, transfer privately, and withdraw with cryptographic
-            guarantees.
-          </p>
-        </section>
-
-        {/* Stats */}
-        <section>
-          <VaultStats />
-        </section>
-
-        {/* Main Content */}
-        <section className="grid lg:grid-cols-2 gap-8">
-          <DepositForm />
-          <RecentDeposits />
-        </section>
-
-        {/* Contract Info */}
-        {vaultAddress && vaultAddress !== "0x0000000000000000000000000000000000000000" && (
-          <section className="bg-card border border-border p-6">
-            <h3 className="text-sm font-mono uppercase tracking-wider text-muted-foreground mb-4">
-              Contract Information
+      {/* Quick Actions */}
+      <section className="grid md:grid-cols-2 gap-4">
+        <Link
+          href="/deposit"
+          className="group card-minimal p-6 flex items-center justify-between hover:border-accent/50 transition-colors"
+        >
+          <div>
+            <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+              Quick Action
+            </span>
+            <h3 className="mt-2 text-lg font-medium group-hover:text-accent transition-colors">
+              Deposit MNT
             </h3>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground font-mono mb-1">
-                  VeilocityVault Address
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="text-sm font-mono break-all">{vaultAddress}</code>
-                  <a
-                    href={`${explorerUrl}/address/${vaultAddress}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-accent hover:opacity-80 transition-opacity shrink-0"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-mono mb-1">
-                  Network
-                </p>
-                <p className="text-sm font-mono">
-                  {chainId === 5003 ? "Mantle Sepolia Testnet" : "Mantle Mainnet"}
-                </p>
-              </div>
-            </div>
-          </section>
-        )}
-      </main>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">
+              Add funds to the private layer
+            </p>
+          </div>
+          <ArrowDownLeft className="w-5 h-5 text-muted-foreground group-hover:text-accent transition-colors" />
+        </Link>
 
-      {/* Footer */}
-      <footer className="border-t border-border mt-16">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground font-mono">
-              <Shield className="w-4 h-4" />
-              Veilocity Demo
-            </div>
-            <p className="text-xs text-muted-foreground font-mono">
-              Private execution layer on Mantle L2
+        <Link
+          href="/withdraw"
+          className="group card-minimal p-6 flex items-center justify-between hover:border-accent/50 transition-colors"
+        >
+          <div>
+            <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+              Quick Action
+            </span>
+            <h3 className="mt-2 text-lg font-medium group-hover:text-accent transition-colors">
+              Withdraw MNT
+            </h3>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">
+              Exit to any address privately
+            </p>
+          </div>
+          <ArrowUpRight className="w-5 h-5 text-muted-foreground group-hover:text-accent transition-colors" />
+        </Link>
+      </section>
+
+      {/* Vault Stats */}
+      <section>
+        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+          Protocol Stats
+        </span>
+        <div className="mt-4">
+          <VaultStats />
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="pt-8 border-t border-border/30">
+        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">
+          How It Works
+        </span>
+        <div className="mt-6 grid md:grid-cols-3 gap-8">
+          <div>
+            <span className="font-mono text-[10px] text-muted-foreground/60 uppercase tracking-widest">
+              01
+            </span>
+            <h4 className="mt-2 font-medium">Deposit</h4>
+            <div className="mt-2 w-6 h-px bg-accent/60" />
+            <p className="mt-3 font-mono text-xs text-muted-foreground leading-relaxed">
+              Deposit MNT with a cryptographic commitment. Your secret key proves ownership.
+            </p>
+          </div>
+          <div>
+            <span className="font-mono text-[10px] text-muted-foreground/60 uppercase tracking-widest">
+              02
+            </span>
+            <h4 className="mt-2 font-medium">Transfer</h4>
+            <div className="mt-2 w-6 h-px bg-accent/60" />
+            <p className="mt-3 font-mono text-xs text-muted-foreground leading-relaxed">
+              Transfer privately between accounts using the CLI without revealing amounts.
+            </p>
+          </div>
+          <div>
+            <span className="font-mono text-[10px] text-muted-foreground/60 uppercase tracking-widest">
+              03
+            </span>
+            <h4 className="mt-2 font-medium">Withdraw</h4>
+            <div className="mt-2 w-6 h-px bg-accent/60" />
+            <p className="mt-3 font-mono text-xs text-muted-foreground leading-relaxed">
+              Generate a ZK proof to withdraw to any address without revealing identity.
             </p>
           </div>
         </div>
-      </footer>
+      </section>
+
+      {/* Contract Info */}
+      {vaultAddress && vaultAddress !== "0x0000000000000000000000000000000000000000" && (
+        <section className="pt-8 border-t border-border/30">
+          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+            Contract
+          </span>
+          <div className="mt-3 flex items-center gap-3">
+            <code className="font-mono text-xs text-muted-foreground">{vaultAddress}</code>
+            <a
+              href={`${explorerUrl}/address/${vaultAddress}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:opacity-70 transition-opacity"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+          <p className="mt-1 font-mono text-[10px] text-muted-foreground/60 uppercase tracking-widest">
+            {chainId === 5003 ? "Mantle Sepolia" : "Mantle Mainnet"}
+          </p>
+        </section>
+      )}
     </div>
   );
 }

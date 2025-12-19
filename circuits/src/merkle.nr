@@ -4,7 +4,7 @@
 use crate::poseidon_utils::hash2;
 
 // Tree depth constant
-global TREE_DEPTH: u32 = 20;
+pub global TREE_DEPTH: u32 = 20;
 
 // Verify a Merkle proof
 // - leaf: the leaf value being proven
@@ -15,18 +15,14 @@ pub fn verify_merkle_proof(
     leaf: Field,
     index: Field,
     path: [Field; TREE_DEPTH],
-    root: Field
+    root: Field,
 ) -> bool {
     let computed_root = compute_root_from_path(leaf, index, path);
     computed_root == root
 }
 
 // Compute root from leaf and path
-pub fn compute_root_from_path(
-    leaf: Field,
-    index: Field,
-    path: [Field; TREE_DEPTH]
-) -> Field {
+pub fn compute_root_from_path(leaf: Field, index: Field, path: [Field; TREE_DEPTH]) -> Field {
     let mut current = leaf;
     let index_bits = index.to_be_bits::<TREE_DEPTH>();
 
@@ -49,12 +45,7 @@ pub fn compute_root_from_path(
 }
 
 // Assert that a Merkle proof is valid
-pub fn assert_merkle_proof(
-    leaf: Field,
-    index: Field,
-    path: [Field; TREE_DEPTH],
-    root: Field
-) {
+pub fn assert_merkle_proof(leaf: Field, index: Field, path: [Field; TREE_DEPTH], root: Field) {
     let computed_root = compute_root_from_path(leaf, index, path);
     assert(computed_root == root, "Invalid Merkle proof");
 }
@@ -64,7 +55,7 @@ pub fn assert_merkle_proof(
 pub fn compute_root_after_update(
     new_leaf: Field,
     index: Field,
-    path: [Field; TREE_DEPTH]
+    path: [Field; TREE_DEPTH],
 ) -> Field {
     compute_root_from_path(new_leaf, index, path)
 }

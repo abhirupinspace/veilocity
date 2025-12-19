@@ -1,16 +1,23 @@
 //! Wallet management for Veilocity CLI
 //!
 //! Handles key generation, storage, and account management.
+//! Uses AES-256-GCM for encryption with Argon2id for key derivation.
 
 use crate::config::Config;
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
 use alloy::primitives::{Address, B256};
 use alloy::signers::local::PrivateKeySigner;
 use anyhow::{anyhow, Context, Result};
-use rand::RngCore;
+use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use veilocity_core::account::AccountSecret;
 use veilocity_core::poseidon::{field_to_hex, PoseidonHasher};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Wallet data structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,64 +177,89 @@ impl WalletManager {
     }
 }
 
-/// Simple key encryption (for demo purposes)
-/// In production, use proper key derivation and encryption (e.g., scrypt + AES-GCM)
+/// Encrypted data format: salt (22 bytes base64) + nonce (12 bytes) + ciphertext
+/// Salt is stored as base64 PHC string prefix, nonce and ciphertext as hex
+#[derive(Zeroize, ZeroizeOnDrop)]
+struct DerivedKey([u8; 32]);
+
+/// Derive encryption key from password using Argon2id
+fn derive_key(password: &str, salt: &SaltString) -> Result<DerivedKey> {
+    let argon2 = Argon2::default();
+    let password_hash = argon2
+        .hash_password(password.as_bytes(), salt)
+        .map_err(|e| anyhow!("Failed to derive key: {}", e))?;
+
+    let hash_output = password_hash
+        .hash
+        .ok_or_else(|| anyhow!("No hash output from Argon2"))?;
+
+    let hash_bytes = hash_output.as_bytes();
+    if hash_bytes.len() < 32 {
+        return Err(anyhow!("Hash output too short"));
+    }
+
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&hash_bytes[..32]);
+    Ok(DerivedKey(key))
+}
+
+/// Encrypt key using AES-256-GCM with Argon2id key derivation
 fn encrypt_key(key: &[u8], password: &str) -> Result<String> {
-    // Simple XOR encryption with password hash (NOT SECURE - demo only)
-    // In production, use proper encryption like AES-GCM with scrypt-derived key
-    let password_hash = simple_hash(password.as_bytes());
-    let encrypted: Vec<u8> = key
-        .iter()
-        .zip(password_hash.iter().cycle())
-        .map(|(k, p)| k ^ p)
-        .collect();
+    // Generate random salt and nonce
+    let salt = SaltString::generate(&mut OsRng);
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
 
-    Ok(hex::encode(encrypted))
+    // Derive encryption key
+    let derived_key = derive_key(password, &salt)?;
+
+    // Encrypt with AES-GCM
+    let cipher = Aes256Gcm::new_from_slice(&derived_key.0)
+        .map_err(|e| anyhow!("Failed to create cipher: {}", e))?;
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(nonce, key)
+        .map_err(|e| anyhow!("Encryption failed: {}", e))?;
+
+    // Format: salt$nonce$ciphertext (all hex except salt which is already base64)
+    Ok(format!(
+        "{}${}${}",
+        salt.as_str(),
+        hex::encode(nonce_bytes),
+        hex::encode(ciphertext)
+    ))
 }
 
-/// Simple key decryption
+/// Decrypt key using AES-256-GCM with Argon2id key derivation
 fn decrypt_key(encrypted: &str, password: &str) -> Result<Vec<u8>> {
-    let encrypted_bytes = hex::decode(encrypted)
-        .context("Failed to decode encrypted key")?;
+    let parts: Vec<&str> = encrypted.split('$').collect();
+    if parts.len() != 3 {
+        return Err(anyhow!("Invalid encrypted key format"));
+    }
 
-    let password_hash = simple_hash(password.as_bytes());
-    let decrypted: Vec<u8> = encrypted_bytes
-        .iter()
-        .zip(password_hash.iter().cycle())
-        .map(|(e, p)| e ^ p)
-        .collect();
+    let salt = SaltString::from_b64(parts[0])
+        .map_err(|e| anyhow!("Invalid salt: {}", e))?;
+    let nonce_bytes = hex::decode(parts[1]).context("Invalid nonce")?;
+    let ciphertext = hex::decode(parts[2]).context("Invalid ciphertext")?;
 
-    Ok(decrypted)
-}
+    if nonce_bytes.len() != 12 {
+        return Err(anyhow!("Invalid nonce length"));
+    }
 
-/// Simple hash function (for demo purposes)
-fn simple_hash(data: &[u8]) -> [u8; 32] {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    // Derive encryption key
+    let derived_key = derive_key(password, &salt)?;
 
-    let mut hasher = DefaultHasher::new();
-    data.hash(&mut hasher);
-    let h1 = hasher.finish();
+    // Decrypt with AES-GCM
+    let cipher = Aes256Gcm::new_from_slice(&derived_key.0)
+        .map_err(|e| anyhow!("Failed to create cipher: {}", e))?;
+    let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let mut hasher = DefaultHasher::new();
-    h1.hash(&mut hasher);
-    let h2 = hasher.finish();
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext.as_ref())
+        .map_err(|_| anyhow!("Decryption failed - wrong password or corrupted data"))?;
 
-    let mut hasher = DefaultHasher::new();
-    h2.hash(&mut hasher);
-    let h3 = hasher.finish();
-
-    let mut hasher = DefaultHasher::new();
-    h3.hash(&mut hasher);
-    let h4 = hasher.finish();
-
-    let mut result = [0u8; 32];
-    result[..8].copy_from_slice(&h1.to_le_bytes());
-    result[8..16].copy_from_slice(&h2.to_le_bytes());
-    result[16..24].copy_from_slice(&h3.to_le_bytes());
-    result[24..32].copy_from_slice(&h4.to_le_bytes());
-
-    result
+    Ok(plaintext)
 }
 
 /// Format ETH amount for display
@@ -258,6 +290,18 @@ mod tests {
         let decrypted = decrypt_key(&encrypted, password).unwrap();
 
         assert_eq!(decrypted, key);
+    }
+
+    #[test]
+    fn test_wrong_password_fails() {
+        let key = [1u8; 32];
+        let password = "correct_password";
+        let wrong_password = "wrong_password";
+
+        let encrypted = encrypt_key(&key, password).unwrap();
+        let result = decrypt_key(&encrypted, wrong_password);
+
+        assert!(result.is_err());
     }
 
     #[test]

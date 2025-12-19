@@ -3,6 +3,7 @@
 use crate::config::Config;
 use crate::wallet::{format_eth, parse_eth, WalletManager};
 use anyhow::{anyhow, Context, Result};
+use colored::Colorize;
 use std::path::PathBuf;
 use tracing::info;
 use veilocity_core::poseidon::{hex_to_field, u128_to_field, PoseidonHasher};
@@ -10,7 +11,7 @@ use veilocity_core::state::StateManager;
 use veilocity_prover::{NoirProver, TransferWitness};
 
 /// Run the transfer command
-pub async fn run(config: &Config, recipient: &str, amount: f64) -> Result<()> {
+pub async fn run(config: &Config, recipient: &str, amount: f64, dry_run: bool) -> Result<()> {
     let wallet_manager = WalletManager::new(config.clone());
 
     // Load wallet
@@ -25,14 +26,28 @@ pub async fn run(config: &Config, recipient: &str, amount: f64) -> Result<()> {
 
     // Parse recipient public key
     let recipient_pubkey = hex_to_field(recipient)
-        .context("Invalid recipient public key. Expected hex string.")?;
+        .context("Invalid recipient public key. Expected hex string (0x...).")?;
 
     // Parse amount
     let amount_wei = parse_eth(amount);
 
-    println!("\n=== Private Transfer ===");
-    println!("Recipient: {}", recipient);
-    println!("Amount: {} ({} wei)", format_eth(amount_wei), amount_wei);
+    println!();
+    println!("{}", "═══ Private Transfer ═══".blue().bold());
+    println!(
+        "Amount:    {} {}",
+        format_eth(amount_wei).bright_white().bold(),
+        format!("({} wei)", amount_wei).dimmed()
+    );
+    println!(
+        "Recipient: 0x{}...{}",
+        &recipient[..8.min(recipient.len())].bright_white(),
+        if recipient.len() > 8 {
+            &recipient[recipient.len() - 6..]
+        } else {
+            ""
+        }
+        .bright_white()
+    );
 
     // Load state
     let mut state = StateManager::new(&config.db_path())
@@ -56,7 +71,11 @@ pub async fn run(config: &Config, recipient: &str, amount: f64) -> Result<()> {
         ));
     }
 
-    println!("Current balance: {}", format_eth(sender_account.balance));
+    println!(
+        "Balance:   {} {}",
+        format_eth(sender_account.balance).green(),
+        "(private)".dimmed()
+    );
 
     // Get Merkle proof for sender
     let sender_path = state.get_merkle_proof(sender_account.index);
@@ -82,19 +101,35 @@ pub async fn run(config: &Config, recipient: &str, amount: f64) -> Result<()> {
         u128_to_field(amount_wei),
     )?;
 
-    println!("\nGenerating ZK proof... (this may take a moment)");
+    if dry_run {
+        println!();
+        println!("{}", "DRY RUN - No transfer executed".yellow().bold());
+        println!(
+            "{}",
+            "Proof would be generated and state would be updated.".dimmed()
+        );
+        println!("{}", "Remove --dry-run to execute the transfer.".dimmed());
+        return Ok(());
+    }
+
+    println!();
+    println!("{}", "Generating ZK proof...".yellow());
+    println!("{}", "(this may take a moment)".dimmed());
 
     // Generate proof
     let prover = NoirProver::new(PathBuf::from("circuits"));
 
     if !prover.is_compiled() {
-        println!("Circuits not compiled. Compiling...");
+        println!("{}", "Compiling circuits...".yellow());
         prover.compile().await?;
     }
 
     let proof = prover.prove_transfer(&witness).await?;
 
-    println!("Proof generated ({} bytes)", proof.len());
+    println!(
+        "{}",
+        format!("✓ Proof generated ({} bytes)", proof.len()).green()
+    );
 
     // Update local state
     // In a full implementation, this would:
@@ -112,9 +147,36 @@ pub async fn run(config: &Config, recipient: &str, amount: f64) -> Result<()> {
     let nullifier_bytes = veilocity_core::poseidon::field_to_bytes(&nullifier);
     state.mark_nullifier_used(&nullifier_bytes)?;
 
-    println!("\nTransfer complete!");
-    println!("Nullifier: 0x{}", hex::encode(nullifier_bytes));
-    println!("New balance: {}", format_eth(sender_updated.balance));
+    // Record transaction
+    let _ = state.record_transaction("transfer", amount_wei, None, Some(recipient), "confirmed");
+
+    println!();
+    println!("{}", "✓ Transfer complete!".green().bold());
+    println!(
+        "Nullifier: 0x{}...",
+        &hex::encode(&nullifier_bytes)[..16].dimmed()
+    );
+
+    println!();
+    println!("{}", "─".repeat(50));
+    println!(
+        "{} sent privately to recipient",
+        format_eth(amount_wei).blue().bold()
+    );
+    println!(
+        "New balance: {}",
+        format_eth(sender_updated.balance).bright_white()
+    );
+
+    println!();
+    println!(
+        "{}",
+        "Note: This is an off-chain transfer. The recipient".dimmed()
+    );
+    println!(
+        "{}",
+        "will see the funds after syncing their local state.".dimmed()
+    );
 
     info!(
         "Private transfer of {} wei to {} completed",

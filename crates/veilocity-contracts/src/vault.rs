@@ -349,3 +349,140 @@ pub fn create_vault_reader(
 
     Ok(VaultReader::with_provider(provider, contract_address))
 }
+
+// ============================================================================
+// EVENT FETCHING - Real-time chain synchronization
+// ============================================================================
+
+use crate::events::{DepositEvent, EventFilter, StateRootUpdatedEvent, VeilocityEvent, WithdrawalEvent};
+use alloy::primitives::keccak256;
+use alloy::rpc::types::Filter;
+use alloy::sol_types::SolEvent;
+
+impl<P: Provider + Clone> VaultReader<P> {
+    /// Fetch deposit events from the chain
+    pub async fn get_deposit_events(
+        &self,
+        filter: &EventFilter,
+    ) -> Result<Vec<DepositEvent>, ContractError> {
+        // Compute event signature hash: keccak256("Deposit(bytes32,uint256,uint256,uint256)")
+        let event_sig = keccak256(IVeilocityVault::Deposit::SIGNATURE.as_bytes());
+        let mut log_filter = Filter::new()
+            .address(self.address)
+            .event_signature(event_sig);
+
+        if let Some(from) = filter.from_block {
+            log_filter = log_filter.from_block(from);
+        }
+        if let Some(to) = filter.to_block {
+            log_filter = log_filter.to_block(to);
+        }
+
+        let logs = self
+            .provider
+            .get_logs(&log_filter)
+            .await
+            .map_err(|e| ContractError::Rpc(e.to_string()))?;
+
+        let mut events = Vec::new();
+        for log in logs {
+            if let Ok(decoded) = log.log_decode::<IVeilocityVault::Deposit>() {
+                let block_number = log.block_number.unwrap_or(0);
+                let tx_hash = log.transaction_hash.unwrap_or_default();
+                events.push(DepositEvent::from_log(&decoded.inner.data, block_number, tx_hash));
+            }
+        }
+
+        Ok(events)
+    }
+
+    /// Fetch withdrawal events from the chain
+    pub async fn get_withdrawal_events(
+        &self,
+        filter: &EventFilter,
+    ) -> Result<Vec<WithdrawalEvent>, ContractError> {
+        let event_sig = keccak256(IVeilocityVault::Withdrawal::SIGNATURE.as_bytes());
+        let mut log_filter = Filter::new()
+            .address(self.address)
+            .event_signature(event_sig);
+
+        if let Some(from) = filter.from_block {
+            log_filter = log_filter.from_block(from);
+        }
+        if let Some(to) = filter.to_block {
+            log_filter = log_filter.to_block(to);
+        }
+
+        let logs = self
+            .provider
+            .get_logs(&log_filter)
+            .await
+            .map_err(|e| ContractError::Rpc(e.to_string()))?;
+
+        let mut events = Vec::new();
+        for log in logs {
+            if let Ok(decoded) = log.log_decode::<IVeilocityVault::Withdrawal>() {
+                let block_number = log.block_number.unwrap_or(0);
+                let tx_hash = log.transaction_hash.unwrap_or_default();
+                events.push(WithdrawalEvent::from_log(&decoded.inner.data, block_number, tx_hash));
+            }
+        }
+
+        Ok(events)
+    }
+
+    /// Fetch state root update events from the chain
+    pub async fn get_state_root_events(
+        &self,
+        filter: &EventFilter,
+    ) -> Result<Vec<StateRootUpdatedEvent>, ContractError> {
+        let event_sig = keccak256(IVeilocityVault::StateRootUpdated::SIGNATURE.as_bytes());
+        let mut log_filter = Filter::new()
+            .address(self.address)
+            .event_signature(event_sig);
+
+        if let Some(from) = filter.from_block {
+            log_filter = log_filter.from_block(from);
+        }
+        if let Some(to) = filter.to_block {
+            log_filter = log_filter.to_block(to);
+        }
+
+        let logs = self
+            .provider
+            .get_logs(&log_filter)
+            .await
+            .map_err(|e| ContractError::Rpc(e.to_string()))?;
+
+        let mut events = Vec::new();
+        for log in logs {
+            if let Ok(decoded) = log.log_decode::<IVeilocityVault::StateRootUpdated>() {
+                let block_number = log.block_number.unwrap_or(0);
+                let tx_hash = log.transaction_hash.unwrap_or_default();
+                events.push(StateRootUpdatedEvent::from_log(&decoded.inner.data, block_number, tx_hash));
+            }
+        }
+
+        Ok(events)
+    }
+
+    /// Fetch all events in a block range
+    pub async fn get_all_events(
+        &self,
+        filter: &EventFilter,
+    ) -> Result<Vec<VeilocityEvent>, ContractError> {
+        let deposits = self.get_deposit_events(filter).await?;
+        let withdrawals = self.get_withdrawal_events(filter).await?;
+        let state_updates = self.get_state_root_events(filter).await?;
+
+        let mut events: Vec<VeilocityEvent> = Vec::new();
+        events.extend(deposits.into_iter().map(VeilocityEvent::Deposit));
+        events.extend(withdrawals.into_iter().map(VeilocityEvent::Withdrawal));
+        events.extend(state_updates.into_iter().map(VeilocityEvent::StateRootUpdated));
+
+        // Sort by block number
+        events.sort_by_key(|e| e.block_number());
+
+        Ok(events)
+    }
+}

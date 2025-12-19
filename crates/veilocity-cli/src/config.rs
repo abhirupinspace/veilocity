@@ -75,6 +75,8 @@ pub struct SyncConfig {
     pub poll_interval_secs: u64,
     /// Number of confirmations to wait for
     pub confirmations: u64,
+    /// Block number where the contract was deployed (to avoid scanning from genesis)
+    pub deployment_block: Option<u64>,
 }
 
 impl Default for SyncConfig {
@@ -82,6 +84,7 @@ impl Default for SyncConfig {
         Self {
             poll_interval_secs: 12,
             confirmations: 2,
+            deployment_block: None,
         }
     }
 }

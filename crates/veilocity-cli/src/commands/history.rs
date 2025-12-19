@@ -1,8 +1,10 @@
 //! History command - show transaction history
 
 use crate::config::Config;
-use crate::wallet::WalletManager;
+use crate::wallet::{format_eth, WalletManager};
 use anyhow::{anyhow, Result};
+use colored::Colorize;
+use veilocity_core::state::StateManager;
 
 /// Run the history command
 pub async fn run(config: &Config) -> Result<()> {
@@ -16,31 +18,142 @@ pub async fn run(config: &Config) -> Result<()> {
     // Load wallet
     let wallet = wallet_manager.load_wallet()?;
 
-    println!("\n=== Transaction History ===");
-    println!("Wallet: {}", wallet.address);
-    println!("Veilocity PubKey: {}...", &wallet.veilocity_pubkey[..20]);
-    println!("────────────────────────────────────────────────\n");
+    println!();
+    println!("{}", "═══ Transaction History ═══".cyan().bold());
+    println!("Wallet: {}", wallet.address.bright_white());
+    println!(
+        "Veilocity PubKey: {}...",
+        &wallet.veilocity_pubkey[..20].dimmed()
+    );
+    println!("{}", "─".repeat(60));
 
-    // In a full implementation, we would:
-    // 1. Query local database for stored transactions
-    // 2. Query on-chain events for deposits/withdrawals
-    // 3. Display formatted transaction history
+    // Try to load state and get transactions
+    let db_path = config.db_path();
+    if !db_path.exists() {
+        println!();
+        println!("{}", "(No transactions found)".yellow());
+        println!(
+            "{}",
+            "Note: Run 'veilocity sync' to synchronize with the network.".dimmed()
+        );
+        print_help();
+        return Ok(());
+    }
 
-    println!("Type        | Amount          | Status      | Time");
-    println!("────────────|─────────────────|─────────────|────────────");
+    let state = StateManager::new(&db_path)?;
+    let transactions = state.get_transactions(50)?;
 
-    // For now, show placeholder
-    println!("(No transactions found)");
-    println!("\nNote: Transaction history is stored locally.");
-    println!("Make deposits, transfers, or withdrawals to see them here.");
+    if transactions.is_empty() {
+        println!();
+        println!("{}", "(No transactions found)".yellow());
+        println!(
+            "{}",
+            "Make deposits, transfers, or withdrawals to see them here.".dimmed()
+        );
+        print_help();
+        return Ok(());
+    }
 
-    // Show tips
-    println!("\n=== Available Commands ===");
-    println!("  veilocity deposit <amount>              - Deposit funds");
-    println!("  veilocity transfer <recipient> <amount> - Private transfer");
-    println!("  veilocity withdraw <amount>             - Withdraw funds");
-    println!("  veilocity balance                       - Check balance");
-    println!("  veilocity sync                          - Sync with network");
+    // Print header
+    println!();
+    println!(
+        "{:<12} {:<18} {:<12} {:<20}",
+        "Type".bold(),
+        "Amount".bold(),
+        "Status".bold(),
+        "Time".bold()
+    );
+    println!("{}", "─".repeat(60));
+
+    // Print transactions
+    for tx in transactions {
+        let tx_type = match tx.tx_type.as_str() {
+            "deposit" => "DEPOSIT".green(),
+            "withdraw" => "WITHDRAW".red(),
+            "transfer" => "TRANSFER".blue(),
+            _ => tx.tx_type.normal(),
+        };
+
+        let amount = tx
+            .amount()
+            .map(format_eth)
+            .unwrap_or_else(|| "N/A".to_string());
+
+        let status = match tx.status.as_str() {
+            "confirmed" => "confirmed".green(),
+            "pending" => "pending".yellow(),
+            "failed" => "failed".red(),
+            _ => tx.status.normal(),
+        };
+
+        let time = format_timestamp(tx.created_at);
+
+        println!("{:<12} {:<18} {:<12} {:<20}", tx_type, amount, status, time);
+
+        // Show tx hash if available
+        if let Some(hash) = tx.tx_hash() {
+            println!("  {} 0x{}...", "→".dimmed(), &hash[..16].dimmed());
+        }
+    }
+
+    println!("{}", "─".repeat(60));
+    print_help();
 
     Ok(())
+}
+
+fn format_timestamp(timestamp: u64) -> String {
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    let tx_time = UNIX_EPOCH + Duration::from_secs(timestamp);
+    let now = SystemTime::now();
+
+    if let Ok(duration) = now.duration_since(tx_time) {
+        let secs = duration.as_secs();
+        if secs < 60 {
+            format!("{}s ago", secs)
+        } else if secs < 3600 {
+            format!("{}m ago", secs / 60)
+        } else if secs < 86400 {
+            format!("{}h ago", secs / 3600)
+        } else {
+            format!("{}d ago", secs / 86400)
+        }
+    } else {
+        "just now".to_string()
+    }
+}
+
+fn print_help() {
+    println!();
+    println!("{}", "═══ Quick Commands ═══".cyan());
+    println!(
+        "  {} {} {}",
+        "veilocity deposit".green(),
+        "<amount>".dimmed(),
+        "- Deposit funds"
+    );
+    println!(
+        "  {} {} {} {}",
+        "veilocity transfer".blue(),
+        "<recipient>".dimmed(),
+        "<amount>".dimmed(),
+        "- Private transfer"
+    );
+    println!(
+        "  {} {} {}",
+        "veilocity withdraw".red(),
+        "<amount>".dimmed(),
+        "- Withdraw funds"
+    );
+    println!(
+        "  {} {}",
+        "veilocity balance".bright_white(),
+        "- Check balance"
+    );
+    println!(
+        "  {} {}",
+        "veilocity sync".yellow(),
+        "- Sync with network"
+    );
 }

@@ -3,6 +3,7 @@
 use crate::config::Config;
 use crate::wallet::{format_eth, WalletManager};
 use anyhow::{Context, Result};
+use colored::Colorize;
 use veilocity_core::poseidon::{field_to_bytes, PoseidonHasher};
 use veilocity_core::state::StateManager;
 
@@ -20,17 +21,30 @@ pub async fn run(config: &Config) -> Result<()> {
     // Get Veilocity secret
     let veilocity_secret = wallet_manager.get_veilocity_secret(&wallet, &password)?;
 
+    println!();
+    println!("{}", "═══ Veilocity Balance ═══".cyan().bold());
+
     // Try to load state
     let db_path = config.db_path();
     if !db_path.exists() {
-        println!("\n=== Veilocity Balance ===");
-        println!("Private:  0.000000 ETH");
-        println!("\nNote: No local state found. Run 'veilocity sync' to sync with the network.");
+        println!();
+        println!(
+            "Private Balance: {}",
+            "0.000000 ETH".bright_white().bold()
+        );
+        println!();
+        println!(
+            "{}",
+            "Note: No local state found.".yellow()
+        );
+        println!(
+            "Run '{}' to sync with the network.",
+            "veilocity sync".cyan()
+        );
         return Ok(());
     }
 
-    let state = StateManager::new(&db_path)
-        .context("Failed to load state")?;
+    let state = StateManager::new(&db_path).context("Failed to load state")?;
 
     // Get account
     let mut hasher = PoseidonHasher::new();
@@ -39,31 +53,41 @@ pub async fn run(config: &Config) -> Result<()> {
 
     let account = state.get_account(&pubkey_bytes)?;
 
-    println!("\n=== Veilocity Balance ===");
-    println!("────────────────────────");
-
+    println!();
     if let Some(account) = account {
-        println!("Private:  {}", format_eth(account.balance));
-        println!("\nAccount Details:");
-        println!("  Leaf Index: {}", account.index);
-        println!("  Nonce:      {}", account.nonce);
+        println!(
+            "Private Balance: {}",
+            format_eth(account.balance).green().bold()
+        );
+        println!();
+        println!("{}", "Account Details".dimmed());
+        println!("  Leaf Index: {}", account.index.to_string().bright_white());
+        println!("  Nonce:      {}", account.nonce.to_string().bright_white());
     } else {
-        println!("Private:  0.000000 ETH");
-        println!("\nNo deposits found for this wallet.");
+        println!(
+            "Private Balance: {}",
+            "0.000000 ETH".bright_white().bold()
+        );
+        println!();
+        println!("{}", "No deposits found for this wallet.".yellow());
     }
 
     // Show state info
-    println!("\n=== State Info ===");
-    println!("State Root: 0x{}", hex::encode(field_to_bytes(&state.state_root())));
-    println!("Total Leaves: {}", state.leaf_count());
+    println!();
+    println!("{}", "═══ State Info ═══".cyan());
+    println!(
+        "State Root:   0x{}...",
+        &hex::encode(field_to_bytes(&state.state_root()))[..16].dimmed()
+    );
+    println!("Total Leaves: {}", state.leaf_count().to_string().bright_white());
+    println!("Network:      {}", config.network.rpc_url.dimmed());
 
-    // Check if vault is configured
-    if !config.network.vault_address.is_empty() {
-        // Optionally show on-chain balance
-        // This would require an RPC call
-    }
-
-    println!("\nLast synced: (run 'veilocity sync' to update)");
+    println!();
+    println!("{}", "─".repeat(40));
+    println!(
+        "Run '{}' to update your local state.",
+        "veilocity sync".cyan()
+    );
 
     Ok(())
 }

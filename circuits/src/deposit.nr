@@ -15,11 +15,7 @@
 use crate::poseidon_utils::compute_deposit_commitment;
 
 // Main deposit circuit function
-pub fn verify_deposit(
-    commitment: pub Field,
-    amount: pub Field,
-    secret: Field
-) {
+pub fn verify_deposit(commitment: Field, amount: Field, secret: Field) {
     // Constraint 1: Commitment is correctly formed
     let computed_commitment = compute_deposit_commitment(secret, amount);
     assert(computed_commitment == commitment, "Invalid commitment");

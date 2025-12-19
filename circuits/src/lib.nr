@@ -6,4 +6,3 @@ pub mod merkle;
 pub mod deposit;
 pub mod withdraw;
 pub mod transfer;
-mod main;

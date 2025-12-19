@@ -358,6 +358,174 @@ impl StateManager {
     pub fn tree(&self) -> &MerkleTree {
         &self.tree
     }
+
+    // ========================================================================
+    // SYNC STATE MANAGEMENT
+    // ========================================================================
+
+    /// Get the last synced block checkpoint
+    pub fn get_sync_checkpoint(&self) -> Option<u64> {
+        let mut stmt = self
+            .db
+            .prepare("SELECT value FROM sync_state WHERE key = 'last_synced_block'")
+            .ok()?;
+
+        let result = stmt
+            .query_row([], |row| {
+                let bytes: Vec<u8> = row.get(0)?;
+                if bytes.len() >= 8 {
+                    let mut arr = [0u8; 8];
+                    arr.copy_from_slice(&bytes[..8]);
+                    Ok(u64::from_le_bytes(arr))
+                } else {
+                    Ok(0)
+                }
+            })
+            .ok();
+
+        result
+    }
+
+    /// Set the last synced block checkpoint
+    pub fn set_sync_checkpoint(&mut self, block: u64) -> Result<(), CoreError> {
+        let bytes = block.to_le_bytes();
+        self.db.execute(
+            "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('last_synced_block', ?1)",
+            params![bytes.as_slice()],
+        )?;
+        Ok(())
+    }
+
+    /// Insert a leaf directly into the Merkle tree (for syncing deposits)
+    pub fn insert_leaf(&mut self, leaf: FieldElement) -> Result<u64, CoreError> {
+        let index = self.tree.leaf_count();
+        self.tree.insert(leaf)?;
+        Ok(index)
+    }
+
+    /// Get the number of pending transactions
+    pub fn pending_transaction_count(&self) -> Result<u64, CoreError> {
+        let mut stmt = self
+            .db
+            .prepare("SELECT COUNT(*) FROM transactions WHERE status = 'pending'")?;
+
+        let count: i64 = stmt.query_row([], |row| row.get(0))?;
+        Ok(count as u64)
+    }
+
+    // ========================================================================
+    // TRANSACTION HISTORY
+    // ========================================================================
+
+    /// Record a transaction in history
+    pub fn record_transaction(
+        &mut self,
+        tx_type: &str,
+        amount: u128,
+        tx_hash: Option<&[u8]>,
+        recipient: Option<&str>,
+        status: &str,
+    ) -> Result<i64, CoreError> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Store transaction data as JSON
+        let data = serde_json::json!({
+            "amount": amount.to_string(),
+            "tx_hash": tx_hash.map(hex::encode),
+            "recipient": recipient,
+        });
+        let data_bytes = serde_json::to_vec(&data).unwrap_or_default();
+
+        self.db.execute(
+            "INSERT INTO transactions (tx_type, data, status, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![tx_type, data_bytes.as_slice(), status, now as i64, now as i64],
+        )?;
+
+        Ok(self.db.last_insert_rowid())
+    }
+
+    /// Get transaction history
+    pub fn get_transactions(&self, limit: u32) -> Result<Vec<TransactionRecord>, CoreError> {
+        let mut stmt = self.db.prepare(
+            "SELECT id, tx_type, data, status, created_at FROM transactions
+             ORDER BY created_at DESC LIMIT ?1",
+        )?;
+
+        let rows = stmt.query_map(params![limit as i64], |row| {
+            let id: i64 = row.get(0)?;
+            let tx_type: String = row.get(1)?;
+            let data_bytes: Vec<u8> = row.get(2)?;
+            let status: String = row.get(3)?;
+            let created_at: i64 = row.get(4)?;
+
+            Ok(TransactionRecord {
+                id: id as u64,
+                tx_type,
+                data: data_bytes,
+                status,
+                created_at: created_at as u64,
+            })
+        })?;
+
+        let mut transactions = Vec::new();
+        for row in rows {
+            transactions.push(row?);
+        }
+
+        Ok(transactions)
+    }
+
+    /// Update transaction status
+    pub fn update_transaction_status(&mut self, id: i64, status: &str) -> Result<(), CoreError> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        self.db.execute(
+            "UPDATE transactions SET status = ?1, updated_at = ?2 WHERE id = ?3",
+            params![status, now as i64, id],
+        )?;
+
+        Ok(())
+    }
+}
+
+/// Represents a transaction record from the database
+#[derive(Debug, Clone)]
+pub struct TransactionRecord {
+    pub id: u64,
+    pub tx_type: String,
+    pub data: Vec<u8>,
+    pub status: String,
+    pub created_at: u64,
+}
+
+impl TransactionRecord {
+    /// Parse the data field as JSON and extract amount
+    pub fn amount(&self) -> Option<u128> {
+        serde_json::from_slice::<serde_json::Value>(&self.data)
+            .ok()
+            .and_then(|v| v.get("amount")?.as_str()?.parse().ok())
+    }
+
+    /// Parse the data field as JSON and extract tx_hash
+    pub fn tx_hash(&self) -> Option<String> {
+        serde_json::from_slice::<serde_json::Value>(&self.data)
+            .ok()
+            .and_then(|v| v.get("tx_hash")?.as_str().map(|s| s.to_string()))
+    }
+
+    /// Parse the data field as JSON and extract recipient
+    pub fn recipient(&self) -> Option<String> {
+        serde_json::from_slice::<serde_json::Value>(&self.data)
+            .ok()
+            .and_then(|v| v.get("recipient")?.as_str().map(|s| s.to_string()))
+    }
 }
 
 #[cfg(test)]

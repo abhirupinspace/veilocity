@@ -2,6 +2,12 @@
 name = "veilocity-cli"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Private execution layer CLI for Mantle - deposit, transfer, and withdraw with zero-knowledge proofs"
+readme = "README.md"
+keywords = ["privacy", "zk", "mantle", "ethereum", "cli"]
+categories = ["command-line-utilities", "cryptography"]
 
 [[bin]]
 name = "veilocity"
@@ -28,6 +34,12 @@ rand.workspace = true
 
 # Security
 rpassword = "7.3"
+argon2 = "0.5"
+aes-gcm = "0.10"
+zeroize = { version = "1.7", features = ["derive"] }
+
+# CLI UX
+colored = "2.1"
 
 # Directories
 dirs = "5.0"

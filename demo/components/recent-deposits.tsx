@@ -3,8 +3,8 @@
 import { useWatchContractEvent, useChainId } from "wagmi";
 import { veilocityVaultAbi, VAULT_ADDRESSES } from "@/lib/abi";
 import { formatEther, shortenHash } from "@/lib/utils";
-import { useState, useEffect } from "react";
-import { History, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface DepositEvent {
@@ -20,7 +20,6 @@ export function RecentDeposits() {
   const vaultAddress = VAULT_ADDRESSES[chainId];
   const [deposits, setDeposits] = useState<DepositEvent[]>([]);
 
-  // Watch for new deposit events
   useWatchContractEvent({
     address: vaultAddress,
     abi: veilocityVaultAbi,
@@ -36,7 +35,6 @@ export function RecentDeposits() {
 
       setDeposits((prev) => {
         const combined = [...newDeposits, ...prev];
-        // Keep only the last 10 deposits
         return combined.slice(0, 10);
       });
     },
@@ -55,51 +53,61 @@ export function RecentDeposits() {
   }
 
   return (
-    <div className="bg-card border border-border">
-      <div className="p-6 border-b border-border">
-        <div className="flex items-center gap-2">
-          <History className="w-5 h-5 text-accent" />
-          <h2 className="text-lg font-medium">Recent Deposits</h2>
+    <div className="card-minimal">
+      <div className="p-6 border-b border-border/50">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">
+            Live Feed
+          </span>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <div className="w-1.5 h-1.5 bg-green-500" />
+              <div className="w-1.5 h-1.5 bg-green-500 absolute top-0 left-0 pulse-ring" />
+            </div>
+            <span className="font-mono text-[10px] text-muted-foreground/60 uppercase tracking-widest">
+              Watching
+            </span>
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground mt-1 font-mono">
-          Live feed of deposits (updates in real-time)
+        <p className="mt-2 font-mono text-xs text-muted-foreground">
+          Recent deposits on-chain
         </p>
       </div>
 
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-border/30">
         {deposits.length === 0 ? (
           <div className="p-6 text-center">
-            <p className="text-sm text-muted-foreground font-mono">
-              No deposits yet. Waiting for events...
+            <p className="font-mono text-xs text-muted-foreground">
+              Waiting for deposits...
             </p>
           </div>
         ) : (
           deposits.map((deposit, index) => (
             <div
               key={`${deposit.transactionHash}-${index}`}
-              className="p-4 hover:bg-secondary/30 transition-colors"
+              className="p-4 hover:bg-secondary/20 transition-colors"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs bg-secondary px-2 py-0.5 font-mono">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-[10px] text-muted-foreground/60">
                       #{Number(deposit.leafIndex)}
                     </span>
-                    <span className="font-mono text-sm font-medium">
+                    <span className="font-mono text-sm">
                       {formatEther(deposit.amount)} MNT
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground font-mono truncate">
-                    Commitment: {shortenHash(deposit.commitment)}
+                  <p className="font-mono text-[10px] text-muted-foreground/60 truncate">
+                    {shortenHash(deposit.commitment)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-muted-foreground font-mono">
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="font-mono text-[10px] text-muted-foreground/60">
                     {deposit.timestamp > 0n
                       ? formatDistanceToNow(new Date(Number(deposit.timestamp) * 1000), {
                           addSuffix: true,
                         })
-                      : "just now"}
+                      : "now"}
                   </span>
                   <a
                     href={`${explorerUrl}/tx/${deposit.transactionHash}`}
@@ -107,7 +115,7 @@ export function RecentDeposits() {
                     rel="noopener noreferrer"
                     className="text-muted-foreground hover:text-accent transition-colors"
                   >
-                    <ExternalLink className="w-4 h-4" />
+                    <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
               </div>

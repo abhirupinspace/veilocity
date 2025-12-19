@@ -137,7 +137,7 @@ export const veilocityVaultAbi = [
 // Contract addresses per network
 export const VAULT_ADDRESSES: Record<number, `0x${string}`> = {
   // Mantle Sepolia Testnet
-  5003: "0xF999A0AC2D64df8B5f4a85932c31f42650380f3e",
+  5003: "0x6Bd1E8D3353cBfF4cC8C5fFA3e9ef11c81cf8D35",
 };
 
 // Initial root (empty Merkle tree)

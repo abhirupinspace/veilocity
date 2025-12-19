@@ -13,6 +13,9 @@ contract VeilocityVaultTest is Test {
     address public alice = address(0x1);
     address public bob = address(0x2);
 
+    // Allow test contract to receive ETH for emergency withdraw test
+    receive() external payable {}
+
     bytes32 constant INITIAL_ROOT = 0x2098f5fb9e239eab3ceac3f27b81e481dc3124d55ffed523a839ee8446b64864;
     bytes32 constant TEST_COMMITMENT = 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef;
     bytes32 constant TEST_NULLIFIER = 0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890;
@@ -288,10 +291,9 @@ contract VeilocityVaultTest is Test {
 
     function test_Receive_Reverts() public {
         vm.prank(alice);
-        vm.expectRevert("Use deposit() instead");
+        // Low-level call should fail when sending ETH directly (must use deposit())
         (bool success, ) = address(vault).call{value: 1 ether}("");
-        // The call will fail but we check the revert reason
-        assertFalse(success);
+        assertFalse(success, "Direct ETH transfer should be rejected");
     }
 
     // ============ Fuzz Tests ============

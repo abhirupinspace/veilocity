@@ -1,14 +1,17 @@
 import { http, createConfig } from "wagmi";
-import { mantleSepoliaTestnet, mantle } from "wagmi/chains";
+import { defineChain } from "viem";
 
-// Mantle Sepolia configuration
-export const mantleSepolia = {
-  ...mantleSepoliaTestnet,
+// Define Mantle Sepolia Testnet
+export const mantleSepolia = defineChain({
+  id: 5003,
+  name: "Mantle Sepolia Testnet",
+  nativeCurrency: {
+    decimals: 18,
+    name: "MNT",
+    symbol: "MNT",
+  },
   rpcUrls: {
     default: {
-      http: ["https://rpc.sepolia.mantle.xyz"],
-    },
-    public: {
       http: ["https://rpc.sepolia.mantle.xyz"],
     },
   },
@@ -16,17 +19,43 @@ export const mantleSepolia = {
     default: {
       name: "Mantle Sepolia Explorer",
       url: "https://sepolia.mantlescan.xyz",
+      apiUrl: "https://api-sepolia.mantlescan.xyz/api",
     },
   },
-};
+  testnet: true,
+});
+
+// Define Mantle Mainnet
+export const mantleMainnet = defineChain({
+  id: 5000,
+  name: "Mantle",
+  nativeCurrency: {
+    decimals: 18,
+    name: "MNT",
+    symbol: "MNT",
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://rpc.mantle.xyz"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "Mantle Explorer",
+      url: "https://mantlescan.xyz",
+      apiUrl: "https://api.mantlescan.xyz/api",
+    },
+  },
+  testnet: false,
+});
 
 export const wagmiConfig = createConfig({
-  chains: [mantleSepolia, mantle],
+  chains: [mantleSepolia, mantleMainnet],
   transports: {
-    [mantleSepolia.id]: http(),
-    [mantle.id]: http(),
+    [mantleSepolia.id]: http("https://rpc.sepolia.mantle.xyz"),
+    [mantleMainnet.id]: http("https://rpc.mantle.xyz"),
   },
   ssr: true,
 });
 
-export const supportedChains = [mantleSepolia, mantle];
+export const supportedChains = [mantleSepolia, mantleMainnet];

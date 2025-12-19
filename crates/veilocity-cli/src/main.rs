@@ -8,6 +8,7 @@
 //! - Check balances and sync state
 
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 use tracing_subscriber::EnvFilter;
 
 pub mod commands;
@@ -18,6 +19,14 @@ pub mod wallet;
 #[command(name = "veilocity")]
 #[command(about = "Private execution layer CLI for Mantle")]
 #[command(version)]
+#[command(after_help = "Examples:
+  veilocity init                    Create a new wallet
+  veilocity deposit 0.1             Deposit 0.1 ETH
+  veilocity transfer <pubkey> 0.05  Send 0.05 ETH privately
+  veilocity withdraw 0.1            Withdraw 0.1 ETH
+  veilocity balance                 Check your balance
+  veilocity sync                    Sync with network
+  veilocity history                 View transaction history")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -38,6 +47,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize a new Veilocity wallet
+    #[command(alias = "i")]
     Init {
         /// Recover from seed phrase
         #[arg(long)]
@@ -45,35 +55,50 @@ enum Commands {
     },
 
     /// Deposit funds from Mantle into Veilocity
+    #[command(alias = "d", alias = "dep")]
     Deposit {
         /// Amount to deposit in ETH
         amount: f64,
+        /// Preview the deposit without executing
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Send private transfer to another user
+    #[command(alias = "t", alias = "send")]
     Transfer {
         /// Recipient's Veilocity public key
         recipient: String,
         /// Amount to transfer
         amount: f64,
+        /// Preview the transfer without executing
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Withdraw funds from Veilocity to Mantle
+    #[command(alias = "w")]
     Withdraw {
         /// Amount to withdraw
         amount: f64,
         /// Recipient address (default: connected wallet)
         #[arg(short, long)]
         recipient: Option<String>,
+        /// Preview the withdrawal without executing
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Display current private balance
+    #[command(alias = "b", alias = "bal")]
     Balance,
 
     /// Synchronize with on-chain state
+    #[command(alias = "s")]
     Sync,
 
     /// Show transaction history
+    #[command(alias = "h", alias = "hist")]
     History,
 }
 
@@ -81,42 +106,43 @@ enum Commands {
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    // Setup logging
-    let filter = if cli.verbose {
-        EnvFilter::new("debug")
-    } else {
-        EnvFilter::new("info")
-    };
-
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .init();
+    // Setup logging - only show logs in verbose mode
+    if cli.verbose {
+        tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new("debug"))
+            .init();
+    }
 
     // Load config
     let config = config::load_config(&cli.config, &cli.network)?;
 
-    match cli.command {
+    let result = match cli.command {
         Commands::Init { recover } => {
-            commands::init::run(recover).await?;
+            commands::init::run(recover).await
         }
-        Commands::Deposit { amount } => {
-            commands::deposit::run(&config, amount).await?;
+        Commands::Deposit { amount, dry_run } => {
+            commands::deposit::run(&config, amount, dry_run).await
         }
-        Commands::Transfer { recipient, amount } => {
-            commands::transfer::run(&config, &recipient, amount).await?;
+        Commands::Transfer { recipient, amount, dry_run } => {
+            commands::transfer::run(&config, &recipient, amount, dry_run).await
         }
-        Commands::Withdraw { amount, recipient } => {
-            commands::withdraw::run(&config, amount, recipient).await?;
+        Commands::Withdraw { amount, recipient, dry_run } => {
+            commands::withdraw::run(&config, amount, recipient, dry_run).await
         }
         Commands::Balance => {
-            commands::balance::run(&config).await?;
+            commands::balance::run(&config).await
         }
         Commands::Sync => {
-            commands::sync::run(&config).await?;
+            commands::sync::run(&config).await
         }
         Commands::History => {
-            commands::history::run(&config).await?;
+            commands::history::run(&config).await
         }
+    };
+
+    if let Err(e) = result {
+        eprintln!("{} {}", "Error:".red().bold(), e);
+        std::process::exit(1);
     }
 
     Ok(())

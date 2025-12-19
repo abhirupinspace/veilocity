@@ -3,8 +3,7 @@
 import { PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider } from "@privy-io/wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { wagmiConfig, mantleSepolia } from "@/lib/wagmi";
-import { mantle } from "wagmi/chains";
+import { wagmiConfig, mantleSepolia, mantleMainnet } from "@/lib/wagmi";
 import { useState } from "react";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -26,14 +25,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
       config={{
         appearance: {
           theme: "dark",
-          accentColor: "#c2410c", // Orange accent matching theme
+          accentColor: "#c2410c",
           logo: undefined,
         },
         embeddedWallets: {
           createOnLogin: "users-without-wallets",
         },
         defaultChain: mantleSepolia,
-        supportedChains: [mantleSepolia, mantle],
+        supportedChains: [mantleSepolia, mantleMainnet],
         loginMethods: ["wallet", "email"],
       }}
     >

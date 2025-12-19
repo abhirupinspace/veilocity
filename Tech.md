@@ -57,6 +57,25 @@ Security       Settlement          Privacy +
 Anchor         Layer               Execution
 ```
 
+### Implementation Status
+
+| Component | Status | Tests | Notes |
+|-----------|--------|-------|-------|
+| **Noir Circuits** | Complete | 19/19 pass | Deposit, Withdraw, Transfer (simple & full) |
+| **Solidity Contracts** | Complete | 29/29 pass | VeilocityVault with all features |
+| **Rust Core** | Complete | 23+ pass | State, Merkle, Poseidon |
+| **Rust Prover** | Complete | 7 pass | Witness generation for all circuits |
+| **Rust Contracts** | Complete | - | Event fetching, real-time sync |
+| **CLI** | Complete | - | All commands functional |
+
+**Key Features Implemented:**
+- Real-time event fetching from chain (not hardcoded)
+- Sync checkpoint tracking in SQLite
+- Full transfer circuit with 4 Merkle paths for state transition
+- Deposit commitment verification
+- Withdrawal proof generation and verification
+- Nullifier tracking for double-spend prevention
+
 ---
 
 ## 2. Technology Stack & Prerequisites

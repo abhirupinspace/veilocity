@@ -20,22 +20,22 @@
 // - index: Leaf index in tree
 // - path: Merkle proof path
 
-use crate::poseidon_utils::{derive_pubkey, compute_leaf, compute_nullifier};
-use crate::merkle::{assert_merkle_proof, TREE_DEPTH};
+use crate::merkle::{assert_merkle_proof, compute_root_from_path, TREE_DEPTH};
+use crate::poseidon_utils::{compute_leaf, compute_nullifier, derive_pubkey, hash2};
 
 // Main withdrawal circuit function
 pub fn verify_withdrawal(
     // Public inputs
-    state_root: pub Field,
-    nullifier: pub Field,
-    amount: pub Field,
-    recipient: pub Field,
+    state_root: Field,
+    nullifier: Field,
+    amount: Field,
+    recipient: Field,
     // Private inputs
     secret: Field,
     balance: Field,
     nonce: Field,
     index: Field,
-    path: [Field; TREE_DEPTH]
+    path: [Field; TREE_DEPTH],
 ) {
     // 1. Derive public key from secret (proves ownership)
     let pubkey = derive_pubkey(secret);
@@ -64,8 +64,6 @@ pub fn verify_withdrawal(
 
 #[test]
 fn test_valid_withdrawal() {
-    use crate::poseidon_utils::hash2;
-
     // Setup: create an account
     let secret: Field = 123456789;
     let balance: Field = 2000000000000000000; // 2 ETH
@@ -88,7 +86,7 @@ fn test_valid_withdrawal() {
     }
 
     // Compute the state root
-    let state_root = crate::merkle::compute_root_from_path(leaf, index, path);
+    let state_root = compute_root_from_path(leaf, index, path);
 
     // Compute nullifier
     let nullifier = compute_nullifier(secret, index, nonce);
@@ -103,14 +101,12 @@ fn test_valid_withdrawal() {
         balance,
         nonce,
         index,
-        path
+        path,
     );
 }
 
 #[test(should_fail_with = "Insufficient balance")]
 fn test_insufficient_balance_fails() {
-    use crate::poseidon_utils::hash2;
-
     let secret: Field = 123456789;
     let balance: Field = 500000000000000000; // 0.5 ETH
     let nonce: Field = 0;
@@ -129,7 +125,7 @@ fn test_insufficient_balance_fails() {
         current_empty = hash2(current_empty, current_empty);
     }
 
-    let state_root = crate::merkle::compute_root_from_path(leaf, index, path);
+    let state_root = compute_root_from_path(leaf, index, path);
     let nullifier = compute_nullifier(secret, index, nonce);
 
     // This should fail due to insufficient balance
@@ -142,14 +138,12 @@ fn test_insufficient_balance_fails() {
         balance,
         nonce,
         index,
-        path
+        path,
     );
 }
 
 #[test(should_fail_with = "Invalid nullifier")]
 fn test_wrong_nullifier_fails() {
-    use crate::poseidon_utils::hash2;
-
     let secret: Field = 123456789;
     let balance: Field = 2000000000000000000;
     let nonce: Field = 0;
@@ -168,7 +162,7 @@ fn test_wrong_nullifier_fails() {
         current_empty = hash2(current_empty, current_empty);
     }
 
-    let state_root = crate::merkle::compute_root_from_path(leaf, index, path);
+    let state_root = compute_root_from_path(leaf, index, path);
 
     // Use wrong nullifier
     let wrong_nullifier: Field = 999999;
@@ -182,6 +176,6 @@ fn test_wrong_nullifier_fails() {
         balance,
         nonce,
         index,
-        path
+        path,
     );
 }

@@ -3,7 +3,7 @@
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useAccount, useBalance } from "wagmi";
 import { shortenAddress, formatEther } from "@/lib/utils";
-import { Wallet, LogOut, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 export function ConnectButton() {
@@ -28,10 +28,10 @@ export function ConnectButton() {
     return (
       <button
         disabled
-        className="flex items-center gap-2 px-4 py-2 bg-secondary text-muted-foreground font-mono text-sm"
+        className="flex items-center gap-2 px-4 py-2 border border-border/50 font-mono text-[10px] uppercase tracking-widest text-muted-foreground"
       >
-        <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
-        Loading...
+        <div className="w-3 h-3 border border-muted-foreground border-t-transparent animate-spin" />
+        Loading
       </button>
     );
   }
@@ -40,10 +40,9 @@ export function ConnectButton() {
     return (
       <button
         onClick={login}
-        className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground font-mono text-sm hover:opacity-90 transition-opacity"
+        className="flex items-center gap-2 px-4 py-2 border border-foreground/20 font-mono text-[10px] uppercase tracking-widest hover:border-accent hover:text-accent transition-colors"
       >
-        <Wallet className="w-4 h-4" />
-        Connect Wallet
+        Connect
       </button>
     );
   }
@@ -52,35 +51,39 @@ export function ConnectButton() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border font-mono text-sm hover:bg-secondary/80 transition-colors"
+        className="flex items-center gap-2 px-4 py-2 border border-border/50 font-mono text-[10px] uppercase tracking-widest hover:border-border transition-colors"
       >
-        <div className="w-2 h-2 bg-green-500 rounded-full" />
+        <div className="w-1.5 h-1.5 bg-green-500" />
         <span>{shortenAddress(address || "")}</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${showDropdown ? "rotate-180" : ""}`} />
+        <ChevronDown className={`w-3 h-3 transition-transform ${showDropdown ? "rotate-180" : ""}`} />
       </button>
 
       {showDropdown && (
-        <div className="absolute right-0 top-full mt-2 w-64 bg-card border border-border p-4 z-50">
-          <div className="space-y-3">
+        <div className="absolute right-0 top-full mt-2 w-56 bg-card border border-border/50 p-4 z-50">
+          <div className="space-y-4">
             <div>
-              <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Address</p>
-              <p className="font-mono text-sm break-all">{address}</p>
+              <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/60">
+                Address
+              </span>
+              <p className="mt-1 font-mono text-xs break-all">{address}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Balance</p>
-              <p className="font-mono text-sm">
-                {balance ? `${formatEther(balance.value)} ${balance.symbol}` : "..."}
+              <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/60">
+                Balance
+              </span>
+              <p className="mt-1 font-mono text-xs">
+                {balance ? `${formatEther(balance.value)} ${balance.symbol}` : "—"}
               </p>
             </div>
-            <div className="border-t border-border pt-3">
+            <div className="pt-3 border-t border-border/30">
               <button
                 onClick={() => {
                   logout();
                   setShowDropdown(false);
                 }}
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
+                className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3 h-3" />
                 Disconnect
               </button>
             </div>
