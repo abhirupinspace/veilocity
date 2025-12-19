@@ -2,9 +2,14 @@
 name = "veilocity-prover"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ZK proof generation for Veilocity using Noir circuits"
+keywords = ["privacy", "zk", "noir", "prover"]
+categories = ["cryptography"]
 
 [dependencies]
-veilocity-core = { path = "../veilocity-core" }
+veilocity-core = { path = "../veilocity-core", version = "0.1.0" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

@@ -2,9 +2,14 @@
 name = "veilocity-contracts"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Smart contract bindings for Veilocity on Mantle"
+keywords = ["privacy", "zk", "mantle", "ethereum"]
+categories = ["cryptography"]
 
 [dependencies]
-veilocity-core = { path = "../veilocity-core" }
+veilocity-core = { path = "../veilocity-core", version = "0.1.0" }
 alloy.workspace = true
 serde.workspace = true
 serde_json.workspace = true

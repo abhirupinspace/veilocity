@@ -2,6 +2,11 @@
 name = "veilocity-core"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core library for Veilocity - Poseidon hashing, Merkle trees, and state management"
+keywords = ["privacy", "zk", "poseidon", "merkle"]
+categories = ["cryptography"]
 
 [dependencies]
 ark-ff.workspace = true
