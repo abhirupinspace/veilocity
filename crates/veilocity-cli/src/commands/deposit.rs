@@ -6,6 +6,7 @@ use crate::wallet::{format_eth, parse_eth, WalletManager};
 use alloy::primitives::{B256, U256};
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
+use std::io::{self, Write};
 use tracing::info;
 use veilocity_contracts::create_vault_client;
 use veilocity_core::poseidon::{field_to_bytes, PoseidonHasher};
@@ -47,41 +48,134 @@ pub async fn run(config: &Config, amount: f64, dry_run: bool) -> Result<()> {
     let amount_u256 = U256::from(amount_wei);
 
     println!();
-    println!("{}", ui::header("Deposit"));
+    println!("{}", ui::header("Shield Deposit"));
     println!();
 
     // Amount display
     println!(
         "  {} {}  {}",
-        "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
+        "↓".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
         format_eth(amount_wei).truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
-        format!("({} wei)", amount_wei).dimmed()
+        "(entering shielded pool)".dimmed()
     );
     println!();
 
-    ui::divider(50);
+    ui::divider(55);
     println!();
     println!(
         "  {} {}",
-        "From:      ".truecolor(120, 120, 120),
+        "From:   ".truecolor(120, 120, 120),
         wallet.address.bright_white()
     );
     println!(
         "  {} {}",
-        "Network:   ".truecolor(120, 120, 120),
+        "To:     ".truecolor(120, 120, 120),
+        "Veilocity Shielded Pool".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!(
+        "  {} {}",
+        "Network:".truecolor(120, 120, 120),
         config.network.rpc_url.dimmed()
     );
 
-    // Generate deposit commitment
+    println!();
+    ui::divider(55);
+
+    // =========================================================================
+    // CRYPTOGRAPHIC COMMITMENT GENERATION
+    // =========================================================================
+
+    println!();
+    println!(
+        "  {}",
+        "╔═══════════════════════════════════════════════════════╗"
+            .truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!(
+        "  {}  {}  {}",
+        "║".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
+        "CRYPTOGRAPHIC COMMITMENT GENERATION"
+            .truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+            .bold(),
+        "            ║".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!(
+        "  {}",
+        "╚═══════════════════════════════════════════════════════╝"
+            .truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!();
+
+    // Stage 1: Derive public key
+    print!(
+        "  {} Deriving shielded public key...",
+        "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    io::stdout().flush().unwrap();
+
     let mut hasher = PoseidonHasher::new();
+    let pubkey = veilocity_secret.derive_pubkey(&mut hasher);
+    let pubkey_bytes = field_to_bytes(&pubkey);
+    let pubkey_hex = hex::encode(&pubkey_bytes);
+
+    println!(
+        "\r  {} Public key derived                         ",
+        "✓".green().bold()
+    );
+    println!(
+        "    {} 0x{}...",
+        "└".truecolor(60, 60, 60),
+        &pubkey_hex[..16].truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    println!("    {}", "│".truecolor(60, 60, 60));
+
+    // Stage 2: Compute Poseidon hash commitment
+    print!(
+        "  {} Computing Poseidon commitment...",
+        "◇".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    io::stdout().flush().unwrap();
+
     let commitment = veilocity_secret.compute_deposit_commitment(&mut hasher, amount_wei);
     let commitment_bytes = field_to_bytes(&commitment);
     let commitment_b256 = B256::from(commitment_bytes);
+    let commitment_hex = hex::encode(&commitment_bytes);
 
     println!(
-        "  {} 0x{}...",
-        "Commitment:".truecolor(120, 120, 120),
-        &hex::encode(commitment_bytes)[..16].dimmed()
+        "\r  {} Commitment computed                        ",
+        "✓".green().bold()
+    );
+    println!(
+        "    {} Hash: Poseidon(secret, amount, nonce)",
+        "├".truecolor(60, 60, 60),
+    );
+    println!(
+        "    {} 0x{}...",
+        "└".truecolor(60, 60, 60),
+        &commitment_hex[..16].bright_white()
+    );
+    println!("    {}", "│".truecolor(60, 60, 60));
+
+    // Stage 3: Show commitment details
+    println!(
+        "  {} {}",
+        "◆".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
+        "Commitment Structure".truecolor(200, 200, 200)
+    );
+    println!(
+        "    {} secret_key: {}",
+        "├".truecolor(60, 60, 60),
+        "████████████████".truecolor(80, 80, 80)
+    );
+    println!(
+        "    {} amount: {} wei",
+        "├".truecolor(60, 60, 60),
+        amount_wei.to_string().bright_white()
+    );
+    println!(
+        "    {} {}",
+        "└".truecolor(60, 60, 60),
+        "(only you can spend this note)".truecolor(100, 100, 100).italic()
     );
 
     if dry_run {
@@ -93,18 +187,48 @@ pub async fn run(config: &Config, amount: f64, dry_run: bool) -> Result<()> {
         return Ok(());
     }
 
-    // Create vault client
-    let vault = create_vault_client(&config.network.rpc_url, vault_address, signer).await?;
+    // =========================================================================
+    // ON-CHAIN TRANSACTION
+    // =========================================================================
 
     println!();
+    ui::divider(55);
+    println!();
     println!(
+        "  {} {}",
+        "▶".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
+        "Submitting On-Chain Transaction".bright_white().bold()
+    );
+    println!();
+
+    // Create vault client
+    print!(
+        "  {} Connecting to Mantle network...",
+        "◐".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
+    io::stdout().flush().unwrap();
+
+    let vault = create_vault_client(&config.network.rpc_url, vault_address, signer).await?;
+
+    println!(
+        "\r  {} Connected to Mantle                        ",
+        "✓".green().bold()
+    );
+
+    // Submit deposit
+    print!(
         "  {} Submitting deposit transaction...",
         "◐".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
     );
+    io::stdout().flush().unwrap();
 
-    // Send deposit transaction
     let tx_hash = vault.deposit(commitment_b256, amount_u256).await?;
     let tx_hash_hex = hex::encode(tx_hash);
+
+    println!(
+        "\r  {} Transaction confirmed!                     ",
+        "✓".green().bold()
+    );
 
     // Record transaction in local database
     config.ensure_data_dir()?;
@@ -118,18 +242,35 @@ pub async fn run(config: &Config, amount: f64, dry_run: bool) -> Result<()> {
         );
     }
 
-    ui::print_success("Deposit successful!");
+    // =========================================================================
+    // SUCCESS SUMMARY
+    // =========================================================================
+
     println!();
+    ui::divider_double(55);
+    println!();
+    println!(
+        "  {} {}",
+        "✓".green().bold(),
+        "DEPOSIT SUCCESSFUL".green().bold()
+    );
+    println!();
+
     println!(
         "  {} 0x{}",
         "Transaction:".truecolor(120, 120, 120),
         tx_hash_hex.bright_white()
     );
+    println!(
+        "  {} 0x{}...",
+        "Commitment:".truecolor(120, 120, 120),
+        &commitment_hex[..16].dimmed()
+    );
 
     if let Some(explorer) = &config.network.explorer_url {
         println!(
             "  {} {}",
-            "Explorer:   ".truecolor(120, 120, 120),
+            "Explorer:  ".truecolor(120, 120, 120),
             format!("{}/tx/0x{}", explorer, tx_hash_hex)
                 .truecolor(100, 149, 237)
                 .underline()
@@ -137,16 +278,57 @@ pub async fn run(config: &Config, amount: f64, dry_run: bool) -> Result<()> {
     }
 
     println!();
-    ui::divider_double(50);
     println!(
-        "  {} Your funds are now in the Veilocity private pool.",
-        "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+        "  {} {} is now in the shielded pool",
+        "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
+        format_eth(amount_wei).truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold()
+    );
+
+    // Privacy summary
+    println!();
+    println!(
+        "  {}",
+        "┌─ Privacy Status ─────────────────────────────────────┐"
+            .truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2)
     );
     println!(
-        "  Run '{}' to update your local state.",
-        ui::command("veilocity sync")
+        "  {} {} Funds status: {}",
+        "│".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2),
+        "●".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2),
+        "Shielded".green().bold()
     );
-    ui::divider_double(50);
+    println!(
+        "  {} {} Spendable by: {}",
+        "│".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2),
+        "●".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2),
+        "Only you".green().bold()
+    );
+    println!(
+        "  {} {} Amount visible: {}",
+        "│".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2),
+        "●".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2),
+        "On-chain (deposit only)".yellow()
+    );
+    println!(
+        "  {} {} Future txns: {}",
+        "│".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2),
+        "●".truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2),
+        "Fully private".green().bold()
+    );
+    println!(
+        "  {}",
+        "└───────────────────────────────────────────────────────┘"
+            .truecolor(ui::PURPLE.0, ui::PURPLE.1, ui::PURPLE.2)
+    );
+
+    ui::divider_double(55);
+
+    println!();
+    println!(
+        "  {} Run '{}' to update your local state.",
+        "ℹ".truecolor(100, 149, 237),
+        "veilocity sync".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    );
     println!();
 
     info!("Deposit of {} wei completed", amount_wei);
