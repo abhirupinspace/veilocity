@@ -3,6 +3,7 @@
 //! This module provides real-time synchronization with the Veilocity contract:
 //! - Fetches deposit events from chain
 //! - Processes deposits and updates local Merkle tree
+//! - Recognizes user's own deposits and creates accounts
 //! - Tracks sync checkpoint for incremental updates
 
 use crate::config::Config;
@@ -12,7 +13,8 @@ use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
 use tracing::{debug, info};
 use veilocity_contracts::{create_vault_reader, DepositEvent, EventFilter, VeilocityEvent};
-use veilocity_core::poseidon::{bytes_to_field, field_to_bytes, PoseidonHasher};
+use veilocity_core::account::AccountSecret;
+use veilocity_core::poseidon::{bytes_to_field, field_to_bytes, u128_to_field, PoseidonHasher};
 use veilocity_core::state::StateManager;
 
 /// Maximum blocks to scan per batch (to avoid RPC timeouts)
@@ -26,6 +28,16 @@ pub async fn run(config: &Config) -> Result<()> {
     if !wallet_manager.wallet_exists() {
         return Err(anyhow!("Wallet not found. Run 'veilocity init' first."));
     }
+
+    // Load wallet and get secret for deposit recognition
+    let wallet = wallet_manager.load_wallet()?;
+    let password = rpassword::prompt_password(format!(
+        "{} ",
+        "Enter wallet password:".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+    ))
+    .context("Failed to read password")?;
+
+    let veilocity_secret = wallet_manager.get_veilocity_secret(&wallet, &password)?;
 
     // Check vault address is configured
     if config.network.vault_address.is_empty() {
@@ -132,7 +144,11 @@ pub async fn run(config: &Config) -> Result<()> {
     // Fetch and process events in batches
     let mut from_block = last_synced_block + 1;
     let mut total_deposits_processed = 0u64;
+    let mut own_deposits_found = 0u64;
     let mut total_withdrawals_processed = 0u64;
+
+    // Create hasher for commitment verification
+    let mut hasher = PoseidonHasher::new();
 
     while from_block <= current_block {
         let to_block = std::cmp::min(from_block + BLOCKS_PER_BATCH - 1, current_block);
@@ -156,16 +172,35 @@ pub async fn run(config: &Config) -> Result<()> {
         for event in events {
             match event {
                 VeilocityEvent::Deposit(deposit) => {
+                    // Check if this deposit belongs to us
+                    let is_ours = check_deposit_ownership(&veilocity_secret, &deposit, &mut hasher);
+
                     process_deposit(&mut state, &deposit)?;
                     total_deposits_processed += 1;
-                    println!(
-                        "    {} Deposit #{}: {} (tx: 0x{}...)",
-                        "✓".green(),
-                        deposit.leaf_index,
-                        format!("{} ETH", deposit.amount_eth())
-                            .truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
-                        &hex::encode(deposit.tx_hash)[..8].dimmed()
-                    );
+
+                    if is_ours {
+                        own_deposits_found += 1;
+                        // Create/update account for this deposit
+                        create_account_from_deposit(&mut state, &veilocity_secret, &deposit, &mut hasher)?;
+                        println!(
+                            "    {} Deposit #{}: {} {} (tx: 0x{}...)",
+                            "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
+                            deposit.leaf_index,
+                            format!("{} ETH", deposit.amount_eth())
+                                .truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
+                                .bold(),
+                            "[YOUR DEPOSIT]".green().bold(),
+                            &hex::encode(deposit.tx_hash)[..8].dimmed()
+                        );
+                    } else {
+                        println!(
+                            "    {} Deposit #{}: {} (tx: 0x{}...)",
+                            "✓".green(),
+                            deposit.leaf_index,
+                            format!("{} ETH", deposit.amount_eth()).dimmed(),
+                            &hex::encode(deposit.tx_hash)[..8].dimmed()
+                        );
+                    }
                 }
                 VeilocityEvent::Withdrawal(withdrawal) => {
                     // Mark nullifier as used
@@ -206,6 +241,14 @@ pub async fn run(config: &Config) -> Result<()> {
         "Deposits processed:   ".truecolor(120, 120, 120),
         total_deposits_processed.to_string().truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
     );
+    if own_deposits_found > 0 {
+        println!(
+            "  {} {} {}",
+            "Your deposits found:  ".truecolor(120, 120, 120),
+            own_deposits_found.to_string().green().bold(),
+            "(account created/updated)".dimmed()
+        );
+    }
     println!(
         "  {} {}",
         "Withdrawals processed:".truecolor(120, 120, 120),
@@ -249,6 +292,53 @@ pub async fn run(config: &Config) -> Result<()> {
         "Sync completed: {} deposits, {} withdrawals, block {}",
         total_deposits_processed, total_withdrawals_processed, current_block
     );
+
+    Ok(())
+}
+
+/// Check if a deposit belongs to the user by verifying the commitment
+fn check_deposit_ownership(
+    secret: &AccountSecret,
+    deposit: &DepositEvent,
+    hasher: &mut PoseidonHasher,
+) -> bool {
+    // Compute what the commitment should be if this deposit is ours
+    let amount_field = u128_to_field(deposit.amount.to::<u128>());
+    let expected_commitment = hasher.compute_deposit_commitment(secret.secret(), &amount_field);
+    let expected_bytes = field_to_bytes(&expected_commitment);
+
+    // Compare with on-chain commitment
+    expected_bytes == deposit.commitment.0
+}
+
+/// Create or update an account from a recognized deposit
+fn create_account_from_deposit(
+    state: &mut StateManager,
+    secret: &AccountSecret,
+    deposit: &DepositEvent,
+    hasher: &mut PoseidonHasher,
+) -> Result<()> {
+    let pubkey_field = secret.derive_pubkey(hasher);
+    let pubkey_bytes = field_to_bytes(&pubkey_field);
+    let deposit_amount = deposit.amount.to::<u128>();
+
+    // Check if account already exists
+    if let Some(mut existing) = state.get_account(&pubkey_bytes)? {
+        // Account exists - add to balance
+        existing.balance += deposit_amount;
+        state.update_account(&existing)?;
+        debug!(
+            "Updated existing account: balance now {} wei",
+            existing.balance
+        );
+    } else {
+        // Create new account with this deposit
+        let account = state.create_account(secret, deposit_amount)?;
+        debug!(
+            "Created new account at index {} with balance {} wei",
+            account.index, account.balance
+        );
+    }
 
     Ok(())
 }
