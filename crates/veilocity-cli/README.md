@@ -12,21 +12,21 @@ cargo install veilocity-cli
 
 ### From GitHub Releases
 
-Download the prebuilt binary for your platform from [GitHub Releases](https://github.com/veilocity/veilocity/releases).
+Download the prebuilt binary for your platform from [GitHub Releases](https://github.com/abhirupinspace/veilocity/releases).
 
 ```bash
 # macOS (Apple Silicon)
-curl -L https://github.com/veilocity/veilocity/releases/latest/download/veilocity-darwin-arm64 -o veilocity
+curl -L https://github.com/abhirupinspace/veilocity/releases/latest/download/veilocity-darwin-arm64 -o veilocity
 chmod +x veilocity
 sudo mv veilocity /usr/local/bin/
 
 # macOS (Intel)
-curl -L https://github.com/veilocity/veilocity/releases/latest/download/veilocity-darwin-x64 -o veilocity
+curl -L https://github.com/abhirupinspace/veilocity/releases/latest/download/veilocity-darwin-x64 -o veilocity
 chmod +x veilocity
 sudo mv veilocity /usr/local/bin/
 
 # Linux (x64)
-curl -L https://github.com/veilocity/veilocity/releases/latest/download/veilocity-linux-x64 -o veilocity
+curl -L https://github.com/abhirupinspace/veilocity/releases/latest/download/veilocity-linux-x64 -o veilocity
 chmod +x veilocity
 sudo mv veilocity /usr/local/bin/
 ```
@@ -34,7 +34,7 @@ sudo mv veilocity /usr/local/bin/
 ### From Source
 
 ```bash
-git clone https://github.com/veilocity/veilocity.git
+git clone https://github.com/abhirupinspace/veilocity.git
 cd veilocity
 cargo build --release
 cp target/release/veilocity /usr/local/bin/

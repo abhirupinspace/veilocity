@@ -56,7 +56,7 @@ forge --version      # >= 0.2
 
 ```bash
 # Clone the repository
-git clone https://github.com/veilocity/veilocity.git
+git clone https://github.com/abhirupinspace/veilocity.git
 cd veilocity
 
 # Build Rust workspace
