@@ -9,7 +9,7 @@ keywords = ["privacy", "zk", "mantle", "ethereum"]
 categories = ["cryptography"]
 
 [dependencies]
-veilocity-core = { path = "../veilocity-core", version = "0.1.3" }
+veilocity-core = { path = "../veilocity-core", version = "0.1.4" }
 alloy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
