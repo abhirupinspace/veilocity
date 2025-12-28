@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::ui;
-use crate::wallet::{format_eth, parse_eth, WalletManager};
+use crate::wallet::{format_mnt, parse_mnt, WalletManager};
 use alloy::primitives::{Address, B256, U256};
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
@@ -53,7 +53,7 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_ru
         .context("Invalid vault address")?;
 
     // Parse amount
-    let amount_wei = parse_eth(amount);
+    let amount_wei = parse_mnt(amount);
 
     println!();
     println!("{}", ui::header("Private Withdrawal"));
@@ -63,7 +63,7 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_ru
     println!(
         "  {} {}  {}",
         "↑".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
-        format_eth(amount_wei).truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
+        format_mnt(amount_wei).truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
         format!("({} wei)", amount_wei).dimmed()
     );
     println!();
@@ -110,15 +110,15 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_ru
     if account.balance < amount_wei {
         return Err(anyhow!(
             "Insufficient balance. Have: {}, Need: {}",
-            format_eth(account.balance),
-            format_eth(amount_wei)
+            format_mnt(account.balance),
+            format_mnt(amount_wei)
         ));
     }
 
     println!(
         "  {} {} {}",
         "Balance:  ".truecolor(120, 120, 120),
-        format_eth(account.balance).green(),
+        format_mnt(account.balance).green(),
         "(shielded)".dimmed()
     );
 
@@ -542,12 +542,12 @@ pub async fn run(config: &Config, amount: f64, recipient: Option<String>, dry_ru
     println!(
         "  {} {} sent to {}",
         "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
-        format_eth(amount_wei).green().bold(),
+        format_mnt(amount_wei).green().bold(),
         format!("{:?}", recipient_address).bright_white()
     );
     println!(
         "  New private balance: {}",
-        format_eth(account_updated.balance)
+        format_mnt(account_updated.balance)
             .truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2)
             .bold()
     );

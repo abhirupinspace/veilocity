@@ -77,6 +77,8 @@ pub struct SyncConfig {
     pub confirmations: u64,
     /// Block number where the contract was deployed (to avoid scanning from genesis)
     pub deployment_block: Option<u64>,
+    /// Indexer URL for fast sync (optional - falls back to RPC if not set)
+    pub indexer_url: Option<String>,
 }
 
 impl Default for SyncConfig {
@@ -85,6 +87,7 @@ impl Default for SyncConfig {
             poll_interval_secs: 12,
             confirmations: 2,
             deployment_block: None,
+            indexer_url: Some("http://localhost:3001".to_string()),
         }
     }
 }

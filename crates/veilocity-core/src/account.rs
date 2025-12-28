@@ -182,17 +182,17 @@ mod tests {
         let mut account = PrivateAccount::new(&mut hasher, secret.secret(), 0);
 
         // Credit
-        account.credit(1_000_000_000_000_000_000); // 1 ETH
+        account.credit(1_000_000_000_000_000_000); // 1 MNT
         assert_eq!(account.balance, 1_000_000_000_000_000_000);
         assert_eq!(account.nonce, 0); // Credit doesn't increment nonce
 
         // Debit
-        assert!(account.debit(500_000_000_000_000_000)); // 0.5 ETH
+        assert!(account.debit(500_000_000_000_000_000)); // 0.5 MNT
         assert_eq!(account.balance, 500_000_000_000_000_000);
         assert_eq!(account.nonce, 1); // Debit increments nonce
 
         // Insufficient balance
-        assert!(!account.debit(1_000_000_000_000_000_000)); // Can't debit 1 ETH
+        assert!(!account.debit(1_000_000_000_000_000_000)); // Can't debit 1 MNT
         assert_eq!(account.balance, 500_000_000_000_000_000); // Balance unchanged
         assert_eq!(account.nonce, 1); // Nonce unchanged
     }

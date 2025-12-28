@@ -62,11 +62,13 @@ Anchor         Layer               Execution
 | Component | Status | Tests | Notes |
 |-----------|--------|-------|-------|
 | **Noir Circuits** | Complete | 19/19 pass | Deposit, Withdraw, Transfer (simple & full) |
-| **Solidity Contracts** | Complete | 29/29 pass | VeilocityVault with all features |
+| **Solidity Contracts** | Complete | 29/29 pass | VeilocityVault with HonkVerifier |
 | **Rust Core** | Complete | 23+ pass | State, Merkle, Poseidon |
 | **Rust Prover** | Complete | 7 pass | Witness generation for all circuits |
 | **Rust Contracts** | Complete | - | Event fetching, real-time sync |
+| **Rust Indexer** | Complete | - | Background sync, REST API |
 | **CLI** | Complete | - | All commands functional |
+| **Demo Web App** | Complete | - | Next.js 15 with Privy auth |
 
 **Key Features Implemented:**
 - Real-time event fetching from chain (not hardcoded)
@@ -87,7 +89,7 @@ Anchor         Layer               Execution
 | **ZK Circuits** | Noir (Aztec) | ≥1.0.0-beta.16 | Privacy proofs, state transitions | [noir-lang.org](https://noir-lang.org) |
 | **Proving Backend** | Barretenberg | ≥1.0.0-beta.16 | UltraPlonk proof generation | [aztec-barretenberg](https://github.com/AztecProtocol/aztec-packages) |
 | **Execution Engine** | Rust | 2021 Edition | CLI, state management, orchestration | [rust-lang.org](https://www.rust-lang.org) |
-| **Smart Contracts** | Solidity | 0.8.24 | Mantle L2 settlement | [soliditylang.org](https://soliditylang.org) |
+| **Smart Contracts** | Solidity | 0.8.27 | Mantle L2 settlement | [soliditylang.org](https://soliditylang.org) |
 | **Contract Framework** | Foundry | Latest | Build, test, deploy | [getfoundry.sh](https://getfoundry.sh) |
 | **RPC Client** | alloy-rs | 0.15 | Ethereum/Mantle interaction | [alloy.rs](https://alloy.rs) |
 | **State Storage** | SQLite + redb | 0.32 / 2.2 | Local encrypted state | - |
@@ -244,7 +246,7 @@ veilocity/
 │       └── lib.nr               # Library exports
 │
 ├── contracts/                    # Solidity Smart Contracts
-│   ├── foundry.toml             # Foundry config (solc 0.8.24)
+│   ├── foundry.toml             # Foundry config (solc 0.8.27)
 │   ├── remappings.txt           # Import remappings
 │   ├── src/
 │   │   ├── VeilocityVault.sol   # Main custody contract
@@ -256,6 +258,17 @@ veilocity/
 │   │   └── Deploy.s.sol         # Deployment script
 │   └── test/
 │       └── VeilocityVault.t.sol # Contract tests
+│
+├── demo/                         # Web Demo Application
+│   ├── package.json             # Next.js 15 + Privy + Wagmi
+│   ├── app/                     # Next.js app router
+│   │   ├── layout.tsx           # Root layout with providers
+│   │   └── page.tsx             # Main dashboard page
+│   ├── components/              # React components
+│   │   ├── deposit-form.tsx     # Deposit with commitment
+│   │   └── withdraw-form.tsx    # Withdraw with ZK proof
+│   └── lib/
+│       └── crypto.ts            # Poseidon hash in browser
 │
 └── crates/                       # Rust Implementation
     ├── veilocity-core/          # State, Merkle, Poseidon
@@ -284,10 +297,17 @@ veilocity/
     │       ├── events.rs        # Event parsing
     │       └── error.rs         # Contract errors
     │
+    ├── veilocity-indexer/       # Background Indexer Service
+    │   └── src/
+    │       ├── main.rs          # Entry point with Axum server
+    │       ├── indexer.rs       # Background sync loop
+    │       └── api.rs           # REST API endpoints
+    │
     └── veilocity-cli/           # Command Line Interface
         └── src/
             ├── main.rs          # Entry point (clap)
             ├── config.rs        # TOML configuration
+            ├── ui.rs            # Terminal UI helpers
             ├── wallet.rs        # Key generation/loading
             └── commands/        # Subcommands
                 ├── init.rs      # Wallet initialization
@@ -296,7 +316,8 @@ veilocity/
                 ├── withdraw.rs  # Withdrawal flow
                 ├── balance.rs   # Balance query
                 ├── sync.rs      # Chain sync
-                └── history.rs   # Transaction history
+                ├── history.rs   # Transaction history
+                └── config.rs    # Config view/set
 ```
 
 ### 3.3 Component Interaction Diagram
@@ -341,6 +362,54 @@ veilocity/
 │  EventListener                                                      │
 │    │                                                                │
 │    └─ DepositEvent ─────────────────────▶ Update local Merkle tree  │
+└─────────────────────────────────────────────────────────────────────┘
+
+### 3.4 Background Indexer Service
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      veilocity-indexer                               │
+│                                                                     │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │                    Background Sync Loop                        │ │
+│  │                                                                │ │
+│  │  1. Poll RPC for new blocks (every N seconds)                  │ │
+│  │  2. Fetch Deposit/Withdrawal events in batches (9000 blocks)   │ │
+│  │  3. Insert deposit commitments into local Merkle tree          │ │
+│  │  4. Track used nullifiers                                      │ │
+│  │  5. Compute and cache current state root                       │ │
+│  │  6. Update sync progress                                       │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │                      REST API (Axum)                           │ │
+│  │                                                                │ │
+│  │  GET /health      → { status, is_syncing, progress, block }    │ │
+│  │  GET /sync        → { state_root, leaves, nullifiers, ... }    │ │
+│  │  GET /deposits    → [ { commitment, amount, leaf_index } ]     │ │
+│  │  GET /withdrawals → [ { nullifier, recipient, amount } ]       │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 3.5 Demo Web Application
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Demo Web App (Next.js 15)                         │
+│                                                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐   │
+│  │    Privy     │  │    Wagmi     │  │    circomlibjs           │   │
+│  │  Auth Layer  │  │   RPC/TX     │  │  Poseidon in Browser     │   │
+│  └──────────────┘  └──────────────┘  └──────────────────────────┘   │
+│                                                                     │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │  Components                                                     │ │
+│  │  • DepositForm: Generate commitment, submit deposit tx         │ │
+│  │  • WithdrawForm: Generate ZK proof (mock), submit withdraw tx  │ │
+│  │  • ProofVisualization: Display ZK proof generation steps       │ │
+│  └────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1527,7 +1596,7 @@ enum Commands {
 
     /// Deposit funds into privacy pool
     Deposit {
-        /// Amount in ETH (e.g., "1.5")
+        /// Amount in MNT (e.g., "1.5")
         amount: String,
     },
 
@@ -1535,13 +1604,13 @@ enum Commands {
     Transfer {
         /// Recipient's public key (hex)
         recipient: String,
-        /// Amount in ETH
+        /// Amount in MNT
         amount: String,
     },
 
     /// Withdraw funds to public address
     Withdraw {
-        /// Amount in ETH
+        /// Amount in MNT
         amount: String,
         /// Destination address (defaults to own address)
         #[arg(long)]
@@ -1655,6 +1724,84 @@ db_path = "~/.veilocity/state.db"
 encrypted = true
 ```
 
+### 6.5 veilocity-indexer
+
+Background indexer service that syncs with the chain and provides a REST API.
+
+#### 6.5.1 Indexer State
+
+```rust
+/// Current indexer state - served via API
+pub struct IndexerState {
+    /// Current Merkle root
+    pub state_root: [u8; 32],
+    /// All deposit commitments (leaves)
+    pub leaves: Vec<[u8; 32]>,
+    /// All deposits indexed
+    pub deposits: Vec<IndexedDeposit>,
+    /// All withdrawals indexed
+    pub withdrawals: Vec<IndexedWithdrawal>,
+    /// Used nullifiers
+    pub nullifiers: Vec<[u8; 32]>,
+    /// Last synced block
+    pub last_block: u64,
+    /// On-chain deposit count
+    pub deposit_count: u64,
+    /// Total value locked
+    pub tvl_wei: String,
+    /// Is currently syncing
+    pub is_syncing: bool,
+    /// Sync progress (0-100)
+    pub sync_progress: u8,
+}
+```
+
+#### 6.5.2 REST API Endpoints
+
+```rust
+// Health check
+GET /health -> { status, is_syncing, sync_progress, last_block }
+
+// Full sync state (main endpoint for CLI)
+GET /sync -> {
+    state_root,      // Current Merkle root (hex)
+    leaves,          // All leaves (hex array)
+    nullifiers,      // Used nullifiers (hex array)
+    last_block,      // Last synced block
+    deposit_count,   // Number of deposits
+    tvl_wei,         // Total value locked
+    is_syncing,      // Sync status
+    sync_progress    // Progress percentage
+}
+
+// Deposit history
+GET /deposits -> {
+    deposits: [{ commitment, amount_wei, amount_mnt, leaf_index, block_number, tx_hash }],
+    total: usize
+}
+
+// Withdrawal history
+GET /withdrawals -> {
+    withdrawals: [{ nullifier, recipient, amount_wei, amount_mnt, block_number, tx_hash }],
+    total: usize
+}
+```
+
+#### 6.5.3 Running the Indexer
+
+```bash
+# Start the indexer
+veilocity-indexer --rpc-url https://rpc.sepolia.mantle.xyz \
+                  --vault-address 0x... \
+                  --port 8080 \
+                  --deployment-block 12345678
+
+# The indexer will:
+# 1. Start syncing from deployment block
+# 2. Serve REST API on http://localhost:8080
+# 3. Poll for new blocks every 12 seconds
+```
+
 ---
 
 ## 7. Smart Contracts (Solidity)
@@ -1665,7 +1812,7 @@ The main on-chain contract that holds deposits and processes withdrawals.
 
 ```solidity
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.27;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
@@ -1743,7 +1890,7 @@ contract VeilocityVault is ReentrancyGuard, Pausable, Ownable {
     //                      EXTERNAL FUNCTIONS
     // ═══════════════════════════════════════════════════════════════
 
-    /// @notice Deposit ETH/MNT into the privacy pool
+    /// @notice Deposit MNT into the privacy pool
     /// @param commitment The deposit commitment hash(secret, amount)
     function deposit(bytes32 commitment) external payable whenNotPaused {
         require(msg.value >= MINIMUM_DEPOSIT, "Deposit too small");
@@ -1852,7 +1999,7 @@ contract VeilocityVault is ReentrancyGuard, Pausable, Ownable {
 
 ```solidity
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.27;
 
 interface IVerifier {
     /// @notice Verify a ZK proof
@@ -1870,7 +2017,7 @@ interface IVerifier {
 
 ```solidity
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.27;
 
 import {IVerifier} from "../interfaces/IVerifier.sol";
 
@@ -1885,11 +2032,30 @@ contract MockVerifier is IVerifier {
 }
 ```
 
-### 7.4 Deployment Script
+### 7.4 HonkVerifier (Production)
+
+The production verifier is auto-generated from Noir circuits using Barretenberg. It implements the Honk proving system.
+
+```solidity
+// Generated by: bb write_solidity_verifier
+// File: contracts/src/HonkVerifier.sol
+
+// Key parameters from the generated verifier:
+uint256 constant N = 65536;                    // Circuit size
+uint256 constant LOG_N = 16;                   // Log of circuit size
+uint256 constant NUMBER_OF_PUBLIC_INPUTS = 20; // Public inputs count
+
+// The verifier includes:
+// - Verification key with G1 points for all constraint polynomials
+// - Pairing-based proof verification
+// - Poseidon2 gates for efficient hashing
+```
+
+### 7.5 Deployment Script
 
 ```solidity
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.27;
 
 import {Script} from "forge-std/Script.sol";
 import {VeilocityVault} from "../src/VeilocityVault.sol";
@@ -1928,7 +2094,7 @@ contract Deploy is Script {
 }
 ```
 
-### 7.5 Contract Security Features
+### 7.6 Contract Security Features
 
 | Feature | Implementation | Protection Against |
 |---------|----------------|-------------------|
@@ -1957,7 +2123,7 @@ contract Deploy is Script {
 │       ▼                                                                 │
 │  ┌────────────────────────────────────────────┐                        │
 │  │ 1. Load account secret from wallet         │                        │
-│  │ 2. Parse amount: 1.0 ETH = 1e18 wei       │                        │
+│  │ 2. Parse amount: 1.0 MNT = 1e18 wei       │                        │
 │  │ 3. Compute commitment:                     │                        │
 │  │    commitment = poseidon(secret, amount)   │                        │
 │  └────────────────────────────────────────────┘                        │
@@ -1966,7 +2132,7 @@ contract Deploy is Script {
 │  ┌────────────────────────────────────────────┐    ┌─────────────────┐ │
 │  │ 4. Build transaction:                      │───▶│ VeilocityVault  │ │
 │  │    vault.deposit(commitment)               │    │    .deposit()   │ │
-│  │    value: 1.0 ETH                         │    └─────────────────┘ │
+│  │    value: 1.0 MNT                         │    └─────────────────┘ │
 │  └────────────────────────────────────────────┘             │          │
 │                                                              ▼          │
 │                                                    ┌─────────────────┐ │
@@ -1985,7 +2151,7 @@ contract Deploy is Script {
 │  └────────────────────────────────────────────┘                        │
 │       │                                                                 │
 │       ▼                                                                 │
-│  "Deposit confirmed. New balance: 1.0 ETH"                             │
+│  "Deposit confirmed. New balance: 1.0 MNT"                             │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2039,7 +2205,7 @@ contract Deploy is Script {
 │  └────────────────────────────────────────────┘                        │
 │       │                                                                 │
 │       ▼                                                                 │
-│  "Transfer complete. New balance: 0.5 ETH"                             │
+│  "Transfer complete. New balance: 0.5 MNT"                             │
 │                                                                         │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │ NOTE: No on-chain transaction!                                   │   │
@@ -2091,7 +2257,7 @@ contract Deploy is Script {
 │  │      nullifier,                            │    │                 │ │
 │  │      recipient,                            │    │ Verifier.verify │ │
 │  │      amount,                               │    │   ↓             │ │
-│  │      root,                                 │    │ ETH transfer    │ │
+│  │      root,                                 │    │ MNT transfer    │ │
 │  │      proof                                 │    └─────────────────┘ │
 │  │    )                                       │             │          │
 │  └────────────────────────────────────────────┘             ▼          │
@@ -2108,7 +2274,7 @@ contract Deploy is Script {
 │  └────────────────────────────────────────────┘                        │
 │       │                                                                 │
 │       ▼                                                                 │
-│  "Withdrawal complete. 0.3 ETH sent to 0xDEF..."                       │
+│  "Withdrawal complete. 0.3 MNT sent to 0xDEF..."                       │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2170,7 +2336,7 @@ contract Deploy is Script {
 │  │ rootHistory: mapping          // Valid historical roots         │   │
 │  │ nullifiers: mapping           // Used nullifiers (spent)        │   │
 │  │ depositCount: uint256         // Number of deposits (leaves)    │   │
-│  │ totalValueLocked: uint256     // ETH held in contract          │   │
+│  │ totalValueLocked: uint256     // MNT held in contract          │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -2530,13 +2696,15 @@ forge script script/Deploy.s.sol \
 ### CLI Commands
 
 ```bash
-veilocity init                        # Initialize wallet
-veilocity deposit <amount>            # Deposit ETH
-veilocity transfer <pubkey> <amount>  # Private transfer
-veilocity withdraw <amount> [--to]    # Withdraw to address
-veilocity balance                     # Check balance
-veilocity sync                        # Sync with chain
-veilocity history                     # View transactions
+veilocity init                        # Initialize wallet (alias: i)
+veilocity deposit <amount>            # Deposit MNT (alias: d, dep)
+veilocity transfer <pubkey> <amount>  # Private transfer (alias: t, send)
+veilocity withdraw <amount> [--to]    # Withdraw to address (alias: w)
+veilocity balance                     # Check balance (alias: b, bal)
+veilocity sync                        # Sync with chain (alias: s)
+veilocity history                     # View transactions (alias: h, hist)
+veilocity config                      # View configuration (alias: cfg)
+veilocity config set <key> <value>    # Set configuration value
 ```
 
 ### Key File Locations
@@ -2560,6 +2728,6 @@ VEILOCITY_PRIVATE_KEY=0x...  # For deployments only
 
 ---
 
-*Document Version: 1.0.0*
-*Last Updated: 2024*
-*Project: Veilocity - Private Execution Layer on Mantle L2*
+*Document Version: 2.0.0*
+*Last Updated: December 2024*
+*Project: Veilocity v0.1.4 - Private Execution Layer on Mantle L2*

@@ -40,6 +40,10 @@ zeroize = { version = "1.7", features = ["derive"] }
 
 # CLI UX
 colored = "2.1"
+indicatif = "0.17"
+
+# HTTP client for indexer
+reqwest = { version = "0.12", features = ["json"] }
 
 # Directories
 dirs = "5.0"

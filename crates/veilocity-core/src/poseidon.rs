@@ -184,7 +184,7 @@ mod tests {
     fn test_compute_leaf() {
         let mut hasher = PoseidonHasher::new();
         let pubkey = FieldElement::from(100u64);
-        let balance = u128_to_field(1_000_000_000_000_000_000u128); // 1 ETH
+        let balance = u128_to_field(1_000_000_000_000_000_000u128); // 1 MNT
         let nonce = FieldElement::from(0u64);
 
         let leaf = hasher.compute_leaf(&pubkey, &balance, &nonce);

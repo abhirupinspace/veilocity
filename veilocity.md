@@ -197,6 +197,8 @@ If you say nothing else, say this.
 | Noir Circuits | 19 | All Pass |
 | Solidity Contracts | 29 | All Pass |
 | Rust Crates | 30+ | All Pass |
+| Indexer Service | - | Functional |
+| Demo Web App | - | Functional |
 
 ### What's Built
 
@@ -211,15 +213,25 @@ If you say nothing else, say this.
 **Smart Contracts (Solidity):**
 - VeilocityVault with deposit, withdraw, state root updates
 - Nullifier tracking for double-spend prevention
-- State root history (30 roots)
+- State root history (100 roots)
 - Emergency pause/withdraw functionality
 - MockVerifier for testing
+- HonkVerifier for production (auto-generated from Noir)
 
 **Rust Implementation:**
 - Real-time event fetching from chain
 - Sync checkpoint tracking in SQLite
 - Full witness generation for all circuits
-- CLI with all commands: init, deposit, transfer, withdraw, balance, sync, history
+- CLI with all commands: init, deposit, transfer, withdraw, balance, sync, history, config
+- Background indexer service with REST API
+- Terminal UI with progress indicators
+
+**Web Demo (Next.js 15):**
+- Privy wallet authentication
+- Wagmi for RPC/transaction handling
+- circomlibjs for Poseidon hashing in browser
+- Deposit form with commitment generation
+- Withdraw form with ZK proof visualization
 
 ### What's Real-Time (Not Hardcoded)
 
@@ -382,7 +394,7 @@ OpenZeppelin  — Access control, reentrancy guards
 ```
 User                    CLI                  Mantle               Veilocity State
   │                      │                     │                        │
-  │─── deposit 1 ETH ───▶│                     │                        │
+  │─── deposit 1 MNT ───▶│                     │                        │
   │                      │                     │                        │
   │                      │── generate commitment (hash of secret + amount)
   │                      │                     │                        │
@@ -636,7 +648,7 @@ interface IVeilocityVault {
         uint256 amount
     );
 
-    // Deposit ETH/MNT into Veilocity
+    // Deposit MNT into Veilocity
     // commitment = hash(secret, amount)
     function deposit(bytes32 commitment) external payable;
 
@@ -922,7 +934,7 @@ USAGE:
     veilocity deposit <AMOUNT>
 
 ARGS:
-    <AMOUNT>    Amount to deposit (in ETH)
+    <AMOUNT>    Amount to deposit (in MNT)
 
 EXAMPLE:
     $ veilocity deposit 1.5
@@ -931,7 +943,7 @@ EXAMPLE:
     Transaction: 0xabc123...
     Waiting for confirmation...
     ✓ Deposit confirmed at block 12345
-    ✓ Balance updated: 1.5 ETH (private)
+    ✓ Balance updated: 1.5 MNT (private)
 ```
 
 **`veilocity transfer`**
@@ -953,7 +965,7 @@ EXAMPLE:
     Updating local state...
     ✓ Transfer complete
 
-    New balance: 1.0 ETH (private)
+    New balance: 1.0 MNT (private)
 ```
 
 **`veilocity withdraw`**
@@ -974,7 +986,7 @@ EXAMPLE:
     Transaction: 0xdef456...
     Waiting for confirmation...
     ✓ Withdrawal confirmed
-    ✓ 0.5 ETH sent to 0x7a3f...
+    ✓ 0.5 MNT sent to 0x7a3f...
 ```
 
 **`veilocity balance`**
@@ -989,8 +1001,8 @@ EXAMPLE:
 
     Veilocity Balance
     ─────────────────
-    Private:  1.0 ETH
-    Pending:  0.0 ETH
+    Private:  1.0 MNT
+    Pending:  0.0 MNT
 
     Last synced: 2 minutes ago
 ```
@@ -1114,6 +1126,7 @@ veilocity/
 ├── Cargo.toml                    # Rust workspace manifest
 ├── Nargo.toml                    # Noir workspace manifest
 ├── veilocity.md                  # This document
+├── Tech.md                       # Technical documentation
 ├── README.md                     # Quick start guide
 ├── LICENSE                       # MIT or Apache-2.0
 │
@@ -1121,27 +1134,39 @@ veilocity/
 │   ├── Nargo.toml
 │   ├── Prover.toml
 │   └── src/
-│       ├── main.nr               # Private transfer circuit
+│       ├── lib.nr                # Library exports
+│       ├── main.nr               # Circuit entry points
 │       ├── deposit.nr            # Deposit commitment circuit
 │       ├── withdraw.nr           # Withdrawal proof circuit
+│       ├── transfer.nr           # Private transfer circuit
 │       ├── merkle.nr             # Merkle tree verification
-│       └── poseidon.nr           # Poseidon hash helpers
+│       └── poseidon_utils.nr     # Poseidon hash helpers
 │
 ├── contracts/                    # Solidity smart contracts
 │   ├── foundry.toml
 │   ├── remappings.txt
 │   ├── src/
 │   │   ├── VeilocityVault.sol    # Main vault: deposit, withdraw, state roots
+│   │   ├── HonkVerifier.sol      # Production verifier (auto-generated)
 │   │   ├── interfaces/
 │   │   │   └── IVerifier.sol     # Verifier interface
-│   │   ├── mocks/
-│   │   │   └── MockVerifier.sol  # Mock for testing
-│   │   └── verifiers/
-│   │       └── UltraVerifier.sol # Auto-generated from Noir (TODO)
+│   │   └── mocks/
+│   │       └── MockVerifier.sol  # Mock for testing
 │   ├── script/
 │   │   └── Deploy.s.sol          # Foundry deployment script
 │   └── test/
 │       └── VeilocityVault.t.sol  # Comprehensive test suite
+│
+├── demo/                         # Web Demo Application
+│   ├── package.json              # Next.js 15 + Privy + Wagmi
+│   ├── app/                      # Next.js app router
+│   │   ├── layout.tsx            # Root layout with providers
+│   │   └── page.tsx              # Main dashboard page
+│   ├── components/               # React components
+│   │   ├── deposit-form.tsx      # Deposit with commitment
+│   │   └── withdraw-form.tsx     # Withdraw with ZK proof
+│   └── lib/
+│       └── crypto.ts             # Poseidon hash in browser
 │
 ├── crates/                       # Rust crates
 │   │
@@ -1150,6 +1175,7 @@ veilocity/
 │   │   └── src/
 │   │       ├── main.rs           # Entry point with clap
 │   │       ├── config.rs         # Configuration handling
+│   │       ├── ui.rs             # Terminal UI helpers
 │   │       ├── wallet.rs         # Wallet management & encryption
 │   │       └── commands/
 │   │           ├── mod.rs        # Command module exports
@@ -1159,7 +1185,8 @@ veilocity/
 │   │           ├── withdraw.rs   # Withdraw with ZK proof
 │   │           ├── balance.rs    # Display private balance
 │   │           ├── sync.rs       # Sync with on-chain state
-│   │           └── history.rs    # Transaction history
+│   │           ├── history.rs    # Transaction history
+│   │           └── config.rs     # Config view/set
 │   │
 │   ├── veilocity-core/           # Core execution engine
 │   │   ├── Cargo.toml
@@ -1180,15 +1207,22 @@ veilocity/
 │   │       ├── witness.rs        # Witness computation
 │   │       └── prover.rs         # NoirProver (bb CLI integration)
 │   │
-│   └── veilocity-contracts/      # Contract interaction
+│   ├── veilocity-contracts/      # Contract interaction
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs            # Module exports
+│   │       ├── error.rs          # ContractError types
+│   │       ├── bindings.rs       # Alloy ABI bindings (sol! macro)
+│   │       ├── events.rs         # Event parsing
+│   │       ├── vault.rs          # VaultClient & VaultReader
+│   │       └── anchor.rs         # StateRootHistory management
+│   │
+│   └── veilocity-indexer/        # Background Indexer Service
 │       ├── Cargo.toml
 │       └── src/
-│           ├── lib.rs            # Module exports
-│           ├── error.rs          # ContractError types
-│           ├── bindings.rs       # Alloy ABI bindings (sol! macro)
-│           ├── events.rs         # Event parsing
-│           ├── vault.rs          # VaultClient & VaultReader
-│           └── anchor.rs         # StateRootHistory management
+│           ├── main.rs           # Entry point with Axum server
+│           ├── indexer.rs        # Background sync loop
+│           └── api.rs            # REST API endpoints
 │
 ├── scripts/
 │   ├── setup.sh                  # Development setup
@@ -1211,6 +1245,7 @@ veilocity/
 | `veilocity-core` | State management, Merkle trees, account logic |
 | `veilocity-prover` | Witness generation, Noir integration, proof creation |
 | `veilocity-contracts` | ABI bindings, transaction building, event indexing |
+| `veilocity-indexer` | Background sync, REST API for state queries |
 
 ### Build Commands
 
@@ -1238,11 +1273,110 @@ forge script script/Deploy.s.sol --broadcast --rpc-url $MANTLE_RPC
 
 # Run CLI
 ./target/release/veilocity --help
+
+# Build and run demo web app
+cd demo && npm install && npm run dev
+
+# Run the indexer service
+./target/release/veilocity-indexer --rpc-url $MANTLE_RPC --vault-address $VAULT_ADDRESS
 ```
 
 ---
 
-## 19. Implementation Roadmap
+## 19. Indexer Service
+
+The indexer service provides a centralized way to sync and query on-chain state.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                       veilocity-indexer                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │              Background Sync Loop                             │   │
+│  │                                                              │   │
+│  │  • Polls RPC every N seconds for new blocks                  │   │
+│  │  • Fetches events in batches (9000 blocks max)               │   │
+│  │  • Updates local Merkle tree with deposit commitments        │   │
+│  │  • Tracks used nullifiers from withdrawals                   │   │
+│  │  • Computes and caches current state root                    │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │              REST API (Axum)                                  │   │
+│  │                                                              │   │
+│  │  GET /health      Health check with sync status              │   │
+│  │  GET /sync        Full sync state for clients                │   │
+│  │  GET /deposits    All indexed deposits                       │   │
+│  │  GET /withdrawals All indexed withdrawals                    │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### API Response Format
+
+```json
+// GET /sync
+{
+  "state_root": "0x...",
+  "leaves": ["0x...", "0x..."],
+  "nullifiers": ["0x...", "0x..."],
+  "last_block": 12345678,
+  "deposit_count": 42,
+  "tvl_wei": "1000000000000000000",
+  "is_syncing": false,
+  "sync_progress": 100
+}
+```
+
+### Running the Indexer
+
+```bash
+veilocity-indexer \
+  --rpc-url https://rpc.sepolia.mantle.xyz \
+  --vault-address 0x... \
+  --port 8080 \
+  --deployment-block 12345678 \
+  --poll-interval 12
+```
+
+---
+
+## 20. Web Demo Application
+
+A Next.js 15 demo application showcasing the privacy features.
+
+### Tech Stack
+
+| Technology | Purpose |
+|------------|---------|
+| Next.js 15 | App router, React 18 |
+| Privy | Wallet authentication |
+| Wagmi | RPC interaction, transactions |
+| viem | Low-level Ethereum operations |
+| circomlibjs | Poseidon hashing in browser |
+
+### Components
+
+- **DepositForm**: Generates commitment and submits deposit tx
+- **WithdrawForm**: Generates ZK proof (mock) and submits withdrawal
+- **ProofVisualization**: Shows ZK proof generation steps
+
+### Running the Demo
+
+```bash
+cd demo
+npm install
+npm run dev
+# Open http://localhost:3000
+```
+
+---
+
+## 21. Implementation Roadmap
 
 ### Phase 1: Foundation
 - Initialize Rust workspace
@@ -1284,7 +1418,7 @@ forge script script/Deploy.s.sol --broadcast --rpc-url $MANTLE_RPC
 
 ---
 
-## 20. Summary
+## 22. Summary
 
 Veilocity is a **private execution layer** that:
 
@@ -1303,17 +1437,11 @@ This design enables **institutional-grade privacy** for OTC settlement, private 
 
 ---
 
-*Document version: 2.0*
-*Last updated: December 2024*
-
----
----
-
 # Part III: Implementation Guide
 
 ---
 
-## 21. Implementation Phases
+## 23. Implementation Phases
 
 This section provides the step-by-step implementation order with exact file paths and code specifications.
 
@@ -1423,7 +1551,7 @@ Test vectors must be validated across both implementations before integration.
 
 ---
 
-## 22. Rust Workspace Dependencies
+## 24. Rust Workspace Dependencies
 
 ```toml
 [workspace.dependencies]
@@ -1470,7 +1598,7 @@ rand = "0.8"
 
 ---
 
-## 23. Noir Circuit Dependencies
+## 25. Noir Circuit Dependencies
 
 ```toml
 # circuits/Nargo.toml
@@ -1486,7 +1614,7 @@ poseidon = { tag = "v0.2.0", git = "https://github.com/noir-lang/poseidon" }
 
 ---
 
-## 24. Gas Estimates (Mantle)
+## 26. Gas Estimates (Mantle)
 
 | Operation | Gas | Cost @ 0.06 Gwei |
 |-----------|-----|------------------|
@@ -1497,7 +1625,7 @@ poseidon = { tag = "v0.2.0", git = "https://github.com/noir-lang/poseidon" }
 
 ---
 
-## 25. Testing Strategy
+## 27. Testing Strategy
 
 ### Unit Tests
 - `veilocity-core`: Poseidon hashes, Merkle tree operations, account logic
@@ -1518,7 +1646,7 @@ poseidon = { tag = "v0.2.0", git = "https://github.com/noir-lang/poseidon" }
 
 ---
 
-## 26. Proving Time Estimates
+## 28. Proving Time Estimates
 
 | Circuit | Constraints | Proving Time (M1 Mac) |
 |---------|-------------|----------------------|
@@ -1528,7 +1656,7 @@ poseidon = { tag = "v0.2.0", git = "https://github.com/noir-lang/poseidon" }
 
 ---
 
-## 27. Critical Implementation Notes
+## 29. Critical Implementation Notes
 
 ### Poseidon Hash Compatibility
 
@@ -1565,7 +1693,7 @@ Formula: `nullifier = poseidon(secret, leaf_index, nonce)`
 
 ---
 
-## 28. Implementation Status
+## 30. Implementation Status
 
 This section tracks what has been implemented and what remains.
 
@@ -1575,6 +1703,7 @@ This section tracks what has been implemented and what remains.
 | File | Status | Description |
 |------|--------|-------------|
 | `VeilocityVault.sol` | ✅ Complete | Main vault with deposit, withdraw, state root management |
+| `HonkVerifier.sol` | ✅ Complete | Production verifier (auto-generated from Noir) |
 | `interfaces/IVerifier.sol` | ✅ Complete | Verifier interface for ZK proofs |
 | `mocks/MockVerifier.sol` | ✅ Complete | Mock verifier for testing |
 | `script/Deploy.s.sol` | ✅ Complete | Foundry deployment script |
@@ -1625,6 +1754,25 @@ This section tracks what has been implemented and what remains.
 | `commands/balance.rs` | ✅ Complete | Display private balance |
 | `commands/sync.rs` | ✅ Complete | Synchronize with on-chain state |
 | `commands/history.rs` | ✅ Complete | Transaction history |
+| `commands/config.rs` | ✅ Complete | Configuration view/set |
+| `ui.rs` | ✅ Complete | Terminal UI helpers |
+
+**veilocity-indexer** (`crates/veilocity-indexer/src/`)
+| File | Status | Description |
+|------|--------|-------------|
+| `main.rs` | ✅ Complete | Entry point with Axum server |
+| `indexer.rs` | ✅ Complete | Background sync loop |
+| `api.rs` | ✅ Complete | REST API endpoints |
+
+#### Web Demo (`demo/`)
+| File | Status | Description |
+|------|--------|-------------|
+| `package.json` | ✅ Complete | Next.js 15 + Privy + Wagmi |
+| `app/layout.tsx` | ✅ Complete | Root layout with providers |
+| `app/page.tsx` | ✅ Complete | Main dashboard page |
+| `components/deposit-form.tsx` | ✅ Complete | Deposit with commitment |
+| `components/withdraw-form.tsx` | ✅ Complete | Withdraw with ZK proof |
+| `lib/crypto.ts` | ✅ Complete | Poseidon hash in browser |
 
 #### Noir Circuits (`circuits/src/`)
 | File | Status | Description |
@@ -1654,13 +1802,14 @@ USAGE:
     veilocity [OPTIONS] <COMMAND>
 
 COMMANDS:
-    init        Initialize a new Veilocity wallet
-    deposit     Deposit funds from Mantle into Veilocity
-    transfer    Send private transfer to another user
-    withdraw    Withdraw funds from Veilocity to Mantle
-    balance     Display current private balance
-    sync        Synchronize with on-chain state
-    history     Show transaction history
+    init        Initialize a new Veilocity wallet (alias: i)
+    deposit     Deposit funds from Mantle into Veilocity (alias: d, dep)
+    transfer    Send private transfer to another user (alias: t, send)
+    withdraw    Withdraw funds from Veilocity to Mantle (alias: w)
+    balance     Display current private balance (alias: b, bal)
+    sync        Synchronize with on-chain state (alias: s)
+    history     Show transaction history (alias: h, hist)
+    config      View or set configuration (alias: cfg)
     help        Print help information
 
 OPTIONS:
@@ -1696,5 +1845,6 @@ OPTIONS:
 
 ---
 
-*Document version: 4.0*
+*Document version: 5.0*
+*Project version: 0.1.4*
 *Last updated: December 2024*

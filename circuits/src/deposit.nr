@@ -32,7 +32,7 @@ pub fn verify_deposit(commitment: Field, amount: Field, secret: Field) {
 #[test]
 fn test_valid_deposit() {
     let secret: Field = 123456789;
-    let amount: Field = 1000000000000000000; // 1 ETH
+    let amount: Field = 1000000000000000000; // 1 MNT
 
     let commitment = compute_deposit_commitment(secret, amount);
 

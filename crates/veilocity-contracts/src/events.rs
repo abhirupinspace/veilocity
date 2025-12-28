@@ -45,8 +45,8 @@ impl DepositEvent {
         format!("0x{}", hex::encode(self.commitment))
     }
 
-    /// Get amount in ETH
-    pub fn amount_eth(&self) -> f64 {
+    /// Get amount in MNT
+    pub fn amount_mnt(&self) -> f64 {
         let wei: u128 = self.amount.try_into().unwrap_or(0);
         wei as f64 / 1e18
     }
@@ -88,8 +88,8 @@ impl WithdrawalEvent {
         format!("0x{}", hex::encode(self.nullifier))
     }
 
-    /// Get amount in ETH
-    pub fn amount_eth(&self) -> f64 {
+    /// Get amount in MNT
+    pub fn amount_mnt(&self) -> f64 {
         let wei: u128 = self.amount.try_into().unwrap_or(0);
         wei as f64 / 1e18
     }

@@ -262,18 +262,18 @@ fn decrypt_key(encrypted: &str, password: &str) -> Result<Vec<u8>> {
     Ok(plaintext)
 }
 
-/// Format ETH amount for display
-pub fn format_eth(wei: u128) -> String {
-    let eth = wei as f64 / 1e18;
-    if eth < 0.0001 {
+/// Format MNT amount for display
+pub fn format_mnt(wei: u128) -> String {
+    let mnt = wei as f64 / 1e18;
+    if mnt < 0.0001 {
         format!("{} wei", wei)
     } else {
-        format!("{:.6} ETH", eth)
+        format!("{:.6} MNT", mnt)
     }
 }
 
-/// Parse ETH amount to wei
-pub fn parse_eth(amount: f64) -> u128 {
+/// Parse MNT amount to wei
+pub fn parse_mnt(amount: f64) -> u128 {
     (amount * 1e18) as u128
 }
 
@@ -305,15 +305,15 @@ mod tests {
     }
 
     #[test]
-    fn test_format_eth() {
-        assert_eq!(format_eth(1_000_000_000_000_000_000), "1.000000 ETH");
-        assert_eq!(format_eth(500_000_000_000_000_000), "0.500000 ETH");
-        assert!(format_eth(100).contains("wei"));
+    fn test_format_mnt() {
+        assert_eq!(format_mnt(1_000_000_000_000_000_000), "1.000000 MNT");
+        assert_eq!(format_mnt(500_000_000_000_000_000), "0.500000 MNT");
+        assert!(format_mnt(100).contains("wei"));
     }
 
     #[test]
-    fn test_parse_eth() {
-        assert_eq!(parse_eth(1.0), 1_000_000_000_000_000_000);
-        assert_eq!(parse_eth(0.5), 500_000_000_000_000_000);
+    fn test_parse_mnt() {
+        assert_eq!(parse_mnt(1.0), 1_000_000_000_000_000_000);
+        assert_eq!(parse_mnt(0.5), 500_000_000_000_000_000);
     }
 }

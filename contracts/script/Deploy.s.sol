@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
 import {VeilocityVault} from "../src/VeilocityVault.sol";
+import {HonkVerifier} from "../src/HonkVerifier.sol";
 import {MockVerifier} from "../src/mocks/MockVerifier.sol";
 
 /// @title Deploy
@@ -15,15 +16,23 @@ contract Deploy is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address verifierAddress = vm.envOr("VERIFIER_ADDRESS", address(0));
+        bool useRealVerifier = vm.envOr("USE_REAL_VERIFIER", false);
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // Deploy mock verifier if no verifier address provided
+        // Deploy verifier
         if (verifierAddress == address(0)) {
-            console.log("Deploying MockVerifier...");
-            MockVerifier mockVerifier = new MockVerifier();
-            verifierAddress = address(mockVerifier);
-            console.log("MockVerifier deployed at:", verifierAddress);
+            if (useRealVerifier) {
+                console.log("Deploying HonkVerifier (REAL ZK VERIFICATION)...");
+                HonkVerifier honkVerifier = new HonkVerifier();
+                verifierAddress = address(honkVerifier);
+                console.log("HonkVerifier deployed at:", verifierAddress);
+            } else {
+                console.log("Deploying MockVerifier (NO ZK VERIFICATION)...");
+                MockVerifier mockVerifier = new MockVerifier();
+                verifierAddress = address(mockVerifier);
+                console.log("MockVerifier deployed at:", verifierAddress);
+            }
         }
 
         // Deploy VeilocityVault
@@ -39,11 +48,39 @@ contract Deploy is Script {
         console.log("Verifier:", verifierAddress);
         console.log("Vault:", address(vault));
         console.log("Initial Root:", vm.toString(INITIAL_ROOT));
+        console.log("Real ZK:", useRealVerifier ? "YES" : "NO (Mock)");
+    }
+}
+
+/// @title DeployProduction
+/// @notice Deployment script with REAL ZK verification
+contract DeployProduction is Script {
+    bytes32 constant INITIAL_ROOT = 0x2098f5fb9e239eab3ceac3f27b81e481dc3124d55ffed523a839ee8446b64864;
+
+    function run() external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+
+        vm.startBroadcast(deployerPrivateKey);
+
+        // Deploy REAL HonkVerifier
+        console.log("Deploying HonkVerifier (REAL ZK VERIFICATION)...");
+        HonkVerifier honkVerifier = new HonkVerifier();
+        console.log("HonkVerifier deployed at:", address(honkVerifier));
+
+        // Deploy vault
+        VeilocityVault vault = new VeilocityVault(address(honkVerifier), INITIAL_ROOT);
+        console.log("VeilocityVault deployed at:", address(vault));
+
+        vm.stopBroadcast();
+
+        console.log("\n=== PRODUCTION DEPLOYMENT ===");
+        console.log("ZK Verification: ENABLED");
+        console.log("Proof System: UltraHonk (Barretenberg)");
     }
 }
 
 /// @title DeployTestnet
-/// @notice Deployment script specifically for Mantle Sepolia testnet
+/// @notice Deployment script for testing (uses MockVerifier)
 contract DeployTestnet is Script {
     bytes32 constant INITIAL_ROOT = 0x2098f5fb9e239eab3ceac3f27b81e481dc3124d55ffed523a839ee8446b64864;
 

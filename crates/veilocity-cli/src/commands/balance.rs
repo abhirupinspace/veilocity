@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::ui;
-use crate::wallet::{format_eth, WalletManager};
+use crate::wallet::{format_mnt, WalletManager};
 use anyhow::{Context, Result};
 use colored::Colorize;
 use veilocity_core::poseidon::{field_to_bytes, PoseidonHasher};
@@ -35,7 +35,7 @@ pub async fn run(config: &Config) -> Result<()> {
         println!(
             "  {} {}",
             "Private Balance:".truecolor(150, 150, 150),
-            "0.000000 ETH".bright_white().bold()
+            "0.000000 MNT".bright_white().bold()
         );
         println!();
         ui::print_notice(
@@ -57,7 +57,7 @@ pub async fn run(config: &Config) -> Result<()> {
     println!();
     if let Some(account) = account {
         // Main balance display
-        let balance_str = format_eth(account.balance);
+        let balance_str = format_mnt(account.balance);
         println!(
             "  {} {}",
             "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
@@ -89,7 +89,7 @@ pub async fn run(config: &Config) -> Result<()> {
             "Private Balance".truecolor(150, 150, 150)
         );
         println!();
-        println!("    {}", "0.000000 ETH".bright_white().bold());
+        println!("    {}", "0.000000 MNT".bright_white().bold());
         println!();
         println!(
             "  {}",

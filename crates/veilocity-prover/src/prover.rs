@@ -32,8 +32,6 @@ impl CircuitType {
 pub struct NoirProver {
     /// Path to the circuits directory
     circuits_dir: PathBuf,
-    /// Path to the compiled circuit artifacts
-    target_dir: PathBuf,
     /// Path for temporary witness/proof files
     work_dir: PathBuf,
 }
@@ -41,12 +39,10 @@ pub struct NoirProver {
 impl NoirProver {
     /// Create a new prover instance
     pub fn new(circuits_dir: PathBuf) -> Self {
-        let target_dir = circuits_dir.join("target");
         let work_dir = circuits_dir.join("work");
 
         Self {
             circuits_dir,
-            target_dir,
             work_dir,
         }
     }
@@ -64,9 +60,42 @@ impl NoirProver {
         Ok(())
     }
 
+    /// Get the circuit directory for a given circuit type
+    fn get_circuit_dir(&self, circuit_type: CircuitType) -> PathBuf {
+        match circuit_type {
+            CircuitType::Withdraw => self.circuits_dir.join("withdraw"),
+            CircuitType::Deposit => self.circuits_dir.clone(),
+            CircuitType::Transfer => self.circuits_dir.clone(),
+        }
+    }
+
+    /// Get the compiled circuit path for a given circuit type
+    fn get_circuit_path(&self, circuit_type: CircuitType) -> PathBuf {
+        match circuit_type {
+            CircuitType::Withdraw => self.circuits_dir.join("withdraw/target/withdraw.json"),
+            CircuitType::Deposit => self.circuits_dir.join("target/veilocity_circuits.json"),
+            CircuitType::Transfer => self.circuits_dir.join("target/veilocity_circuits.json"),
+        }
+    }
+
+    /// Get the VK path for a given circuit type
+    fn get_vk_path(&self, circuit_type: CircuitType) -> PathBuf {
+        match circuit_type {
+            CircuitType::Withdraw => self.circuits_dir.join("withdraw/target/vk/vk"),
+            CircuitType::Deposit => self.circuits_dir.join("target/vk/vk"),
+            CircuitType::Transfer => self.circuits_dir.join("target/vk/vk"),
+        }
+    }
+
     /// Check if the circuit has been compiled
     pub fn is_compiled(&self) -> bool {
-        self.target_dir.join("veilocity_circuits.json").exists()
+        // Check if withdraw circuit is compiled (main circuit for now)
+        self.get_circuit_path(CircuitType::Withdraw).exists()
+    }
+
+    /// Check if a specific circuit type is compiled
+    pub fn is_circuit_compiled(&self, circuit_type: CircuitType) -> bool {
+        self.get_circuit_path(circuit_type).exists()
     }
 
     /// Compile the Noir circuits
@@ -129,34 +158,46 @@ impl NoirProver {
 
     /// Generate proof using bb (Barretenberg)
     async fn generate_proof(&self, circuit_type: CircuitType) -> Result<Vec<u8>, ProverError> {
-        if !self.is_compiled() {
+        if !self.is_circuit_compiled(circuit_type) {
             return Err(ProverError::CircuitNotCompiled);
         }
 
-        let circuit_path = self.target_dir.join("veilocity_circuits.json");
+        let circuit_dir = self.get_circuit_dir(circuit_type);
+        let circuit_path = self.get_circuit_path(circuit_type);
         let witness_path = self.work_dir.join("witness.gz");
         let proof_path = self.work_dir.join("proof");
         let prover_toml = self.work_dir.join("Prover.toml");
 
-        debug!("Generating witness for {:?}...", circuit_type);
+        debug!("Generating witness for {:?} from {:?}...", circuit_type, circuit_dir);
+
+        // Copy Prover.toml to circuit directory
+        let circuit_prover_toml = circuit_dir.join("Prover.toml");
+        std::fs::copy(&prover_toml, &circuit_prover_toml)
+            .map_err(|e| ProverError::CommandFailed(format!("Failed to copy Prover.toml: {}", e)))?;
 
         // Step 1: Generate witness using nargo execute
+        // The witness file will be created in target/<witness_name>.gz
+        let witness_name = "proof_witness";
         let output = Command::new("nargo")
-            .current_dir(&self.circuits_dir)
+            .current_dir(&circuit_dir)
             .arg("execute")
-            .arg("--prover-toml")
-            .arg(&prover_toml)
-            .arg("--witness-path")
-            .arg(&witness_path)
+            .arg(witness_name)
             .output()
             .map_err(|e| ProverError::CommandFailed(format!("Failed to run nargo execute: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(ProverError::WitnessGeneration(stderr.to_string()));
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(ProverError::WitnessGeneration(format!(
+                "stderr: {}\nstdout: {}",
+                stderr, stdout
+            )));
         }
 
-        debug!("Generating proof...");
+        // The witness file is created in target/<witness_name>.gz
+        let actual_witness_path = circuit_dir.join("target").join(format!("{}.gz", witness_name));
+
+        debug!("Generating proof with bb from witness at {:?}...", actual_witness_path);
 
         // Step 2: Generate proof using bb
         let output = Command::new("bb")
@@ -164,7 +205,7 @@ impl NoirProver {
             .arg("-b")
             .arg(&circuit_path)
             .arg("-w")
-            .arg(&witness_path)
+            .arg(&actual_witness_path)
             .arg("-o")
             .arg(&proof_path)
             .output()
@@ -190,16 +231,16 @@ impl NoirProver {
     pub async fn verify_proof(
         &self,
         proof: &[u8],
-        _circuit_type: CircuitType,
+        circuit_type: CircuitType,
     ) -> Result<bool, ProverError> {
-        if !self.is_compiled() {
+        if !self.is_circuit_compiled(circuit_type) {
             return Err(ProverError::CircuitNotCompiled);
         }
 
         self.ensure_work_dir().await?;
 
-        let circuit_path = self.target_dir.join("veilocity_circuits.json");
-        let vk_path = self.target_dir.join("vk");
+        let circuit_path = self.get_circuit_path(circuit_type);
+        let vk_path = self.get_vk_path(circuit_type);
         let proof_path = self.work_dir.join("proof_to_verify");
 
         // Write proof to file
@@ -220,16 +261,21 @@ impl NoirProver {
         Ok(output.status.success())
     }
 
-    /// Generate the verification key
-    pub async fn generate_vk(&self) -> Result<(), ProverError> {
-        if !self.is_compiled() {
+    /// Generate the verification key for a specific circuit
+    pub async fn generate_vk(&self, circuit_type: CircuitType) -> Result<(), ProverError> {
+        if !self.is_circuit_compiled(circuit_type) {
             return Err(ProverError::CircuitNotCompiled);
         }
 
-        let circuit_path = self.target_dir.join("veilocity_circuits.json");
-        let vk_path = self.target_dir.join("vk");
+        let circuit_path = self.get_circuit_path(circuit_type);
+        let vk_path = self.get_vk_path(circuit_type);
 
-        info!("Generating verification key...");
+        // Create parent directory if needed
+        if let Some(parent) = vk_path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+
+        info!("Generating verification key for {:?}...", circuit_type);
 
         let output = Command::new("bb")
             .arg("write_vk")
@@ -250,16 +296,16 @@ impl NoirProver {
             )));
         }
 
-        info!("Verification key generated");
+        info!("Verification key generated for {:?}", circuit_type);
         Ok(())
     }
 
-    /// Generate the Solidity verifier contract
-    pub async fn generate_solidity_verifier(&self, output_path: &Path) -> Result<(), ProverError> {
-        let vk_path = self.target_dir.join("vk");
+    /// Generate the Solidity verifier contract for a specific circuit
+    pub async fn generate_solidity_verifier(&self, circuit_type: CircuitType, output_path: &Path) -> Result<(), ProverError> {
+        let vk_path = self.get_vk_path(circuit_type);
 
         if !vk_path.exists() {
-            self.generate_vk().await?;
+            self.generate_vk(circuit_type).await?;
         }
 
         info!("Generating Solidity verifier...");

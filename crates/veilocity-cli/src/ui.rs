@@ -641,7 +641,7 @@ mod tests {
     fn test_format_hash() {
         assert_eq!(
             format_hash("0x1234567890abcdef1234567890abcdef"),
-            "0x12345678901234..."
+            "0x1234567890abcd..."
         );
     }
 }

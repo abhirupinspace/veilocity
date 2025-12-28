@@ -5,6 +5,7 @@ members = [
     "crates/veilocity-prover",
     "crates/veilocity-contracts",
     "crates/veilocity-cli",
+    "crates/veilocity-indexer",
 ]
 
 [workspace.package]

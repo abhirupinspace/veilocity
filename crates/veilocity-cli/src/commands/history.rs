@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::ui;
-use crate::wallet::{format_eth, WalletManager};
+use crate::wallet::{format_mnt, WalletManager};
 use anyhow::{anyhow, Result};
 use colored::Colorize;
 use veilocity_core::state::StateManager;
@@ -90,7 +90,7 @@ pub async fn run(config: &Config) -> Result<()> {
 
         let amount = tx
             .amount()
-            .map(format_eth)
+            .map(format_mnt)
             .unwrap_or_else(|| "N/A".to_string());
 
         let status = match tx.status.as_str() {

@@ -13,7 +13,7 @@ contract VeilocityVaultTest is Test {
     address public alice = address(0x1);
     address public bob = address(0x2);
 
-    // Allow test contract to receive ETH for emergency withdraw test
+    // Allow test contract to receive MNT for emergency withdraw test
     receive() external payable {}
 
     bytes32 constant INITIAL_ROOT = 0x2098f5fb9e239eab3ceac3f27b81e481dc3124d55ffed523a839ee8446b64864;

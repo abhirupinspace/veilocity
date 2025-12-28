@@ -65,7 +65,7 @@ export interface PrivateDeposit {
   id: string;
   secret: `0x${string}`;
   commitment: `0x${string}`;
-  amount: string; // in ETH
+  amount: string; // in MNT
   amountWei: string;
   leafIndex: number;
   timestamp: number;

@@ -476,4 +476,74 @@ mod tests {
 
         assert_eq!(witness.sender_path.len(), TREE_DEPTH);
     }
+
+    /// Generate a valid test withdraw witness with correct Merkle proof
+    /// This test outputs the Prover.toml for debugging
+    #[test]
+    fn test_generate_valid_withdraw_witness() {
+        use veilocity_core::poseidon::{field_to_hex, PoseidonHasher};
+
+        let mut hasher = PoseidonHasher::new();
+
+        // Test values matching circuit test
+        let secret = u64_to_field(123456789);
+        let balance = u64_to_field(2000000000000000000); // 2 MNT
+        let nonce = u64_to_field(0);
+        let index = u64_to_field(0);
+        let amount = u64_to_field(1000000000000000000); // 1 MNT
+        let recipient = u64_to_field(0x1234567890abcdef);
+
+        // Compute derived values
+        let pubkey = hasher.derive_pubkey(&secret);
+        let leaf = hasher.compute_leaf(&pubkey, &balance, &nonce);
+        let nullifier = hasher.compute_nullifier(&secret, &index, &nonce);
+
+        // Build empty Merkle path (for leaf at index 0)
+        let zero = u64_to_field(0);
+        let mut empty = hasher.hash2(&zero, &zero);
+        let mut path = Vec::new();
+
+        for _ in 0..TREE_DEPTH {
+            path.push(empty);
+            empty = hasher.hash2(&empty, &empty);
+        }
+
+        // Compute state root from leaf and path
+        let mut current = leaf;
+        let index_val: u64 = 0;
+        for i in 0..TREE_DEPTH {
+            let sibling = path[i];
+            let bit = (index_val >> i) & 1;
+            if bit == 0 {
+                current = hasher.hash2(&current, &sibling);
+            } else {
+                current = hasher.hash2(&sibling, &current);
+            }
+        }
+        let state_root = current;
+
+        // Create witness
+        let witness = WithdrawWitness::new(
+            state_root,
+            nullifier,
+            amount,
+            recipient,
+            secret,
+            balance,
+            nonce,
+            index,
+            path,
+        )
+        .unwrap();
+
+        // Output the Prover.toml for debugging
+        println!("=== Valid Prover.toml for Withdraw Circuit ===");
+        println!("{}", witness.to_toml());
+        println!("==============================================");
+
+        // Verify witness is valid
+        assert_eq!(witness.path.len(), TREE_DEPTH);
+        assert!(!witness.state_root.is_empty());
+        assert!(!witness.nullifier.is_empty());
+    }
 }

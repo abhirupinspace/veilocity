@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::ui;
-use crate::wallet::{format_eth, parse_eth, WalletManager};
+use crate::wallet::{format_mnt, parse_mnt, WalletManager};
 use alloy::primitives::{B256, U256};
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
@@ -44,7 +44,7 @@ pub async fn run(config: &Config, amount: f64, dry_run: bool) -> Result<()> {
         .context("Invalid vault address")?;
 
     // Parse amount
-    let amount_wei = parse_eth(amount);
+    let amount_wei = parse_mnt(amount);
     let amount_u256 = U256::from(amount_wei);
 
     println!();
@@ -55,7 +55,7 @@ pub async fn run(config: &Config, amount: f64, dry_run: bool) -> Result<()> {
     println!(
         "  {} {}  {}",
         "↓".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
-        format_eth(amount_wei).truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
+        format_mnt(amount_wei).truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold(),
         "(entering shielded pool)".dimmed()
     );
     println!();
@@ -281,7 +281,7 @@ pub async fn run(config: &Config, amount: f64, dry_run: bool) -> Result<()> {
     println!(
         "  {} {} is now in the shielded pool",
         "◈".truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2),
-        format_eth(amount_wei).truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold()
+        format_mnt(amount_wei).truecolor(ui::ORANGE.0, ui::ORANGE.1, ui::ORANGE.2).bold()
     );
 
     // Privacy summary

@@ -71,7 +71,7 @@ fn test_derive_pubkey() {
 #[test]
 fn test_compute_leaf() {
     let pubkey: Field = 100;
-    let balance: Field = 1000000000000000000; // 1 ETH in wei
+    let balance: Field = 1000000000000000000; // 1 MNT in wei
     let nonce: Field = 0;
 
     let leaf = compute_leaf(pubkey, balance, nonce);

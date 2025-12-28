@@ -170,10 +170,10 @@ pub fn verify_transfer_simple(
 fn test_valid_simple_transfer() {
     // Setup sender account
     let sender_secret: Field = 111111;
-    let sender_balance: Field = 2000000000000000000; // 2 ETH
+    let sender_balance: Field = 2000000000000000000; // 2 MNT
     let sender_nonce: Field = 0;
     let sender_index: Field = 0;
-    let amount: Field = 500000000000000000; // 0.5 ETH
+    let amount: Field = 500000000000000000; // 0.5 MNT
 
     // Recipient
     let recipient_pubkey: Field = 0xabcdef123456;
@@ -214,10 +214,10 @@ fn test_valid_simple_transfer() {
 #[test(should_fail_with = "Insufficient balance")]
 fn test_transfer_insufficient_balance() {
     let sender_secret: Field = 111111;
-    let sender_balance: Field = 500000000000000000; // 0.5 ETH
+    let sender_balance: Field = 500000000000000000; // 0.5 MNT
     let sender_nonce: Field = 0;
     let sender_index: Field = 0;
-    let amount: Field = 1000000000000000000; // Try to send 1 ETH
+    let amount: Field = 1000000000000000000; // Try to send 1 MNT
 
     let recipient_pubkey: Field = 0xabcdef123456;
 
@@ -267,16 +267,16 @@ fn compute_empty_path() -> [Field; TREE_DEPTH] {
 fn test_valid_full_transfer_adjacent_indices() {
     // === Setup accounts ===
     let sender_secret: Field = 111111;
-    let sender_balance: Field = 2000000000000000000; // 2 ETH
+    let sender_balance: Field = 2000000000000000000; // 2 MNT
     let sender_nonce: Field = 0;
     let sender_index: Field = 0;
 
     let recipient_secret: Field = 222222;
-    let recipient_balance: Field = 1000000000000000000; // 1 ETH
+    let recipient_balance: Field = 1000000000000000000; // 1 MNT
     let recipient_nonce: Field = 0;
     let recipient_index: Field = 1;
 
-    let amount: Field = 500000000000000000; // 0.5 ETH
+    let amount: Field = 500000000000000000; // 0.5 MNT
 
     // Derive keys and compute leaves
     let sender_pubkey = derive_pubkey(sender_secret);

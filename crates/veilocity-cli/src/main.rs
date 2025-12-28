@@ -29,9 +29,9 @@ pub mod wallet;
 ")]
 #[command(after_help = "Examples:
   veilocity init                    Create a new wallet
-  veilocity deposit 0.1             Deposit 0.1 ETH
-  veilocity transfer <pubkey> 0.05  Send 0.05 ETH privately
-  veilocity withdraw 0.1            Withdraw 0.1 ETH
+  veilocity deposit 0.1             Deposit 0.1 MNT
+  veilocity transfer <pubkey> 0.05  Send 0.05 MNT privately
+  veilocity withdraw 0.1            Withdraw 0.1 MNT
   veilocity balance                 Check your balance
   veilocity sync                    Sync with network
   veilocity history                 View transaction history
@@ -67,7 +67,7 @@ enum Commands {
     /// Deposit funds from Mantle into Veilocity
     #[command(alias = "d", alias = "dep")]
     Deposit {
-        /// Amount to deposit in ETH
+        /// Amount to deposit in MNT
         amount: f64,
         /// Preview the deposit without executing
         #[arg(long)]

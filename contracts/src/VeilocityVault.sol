@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.27;
 
 import {IVerifier} from "./interfaces/IVerifier.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -252,7 +252,7 @@ contract VeilocityVault is ReentrancyGuard, Pausable, Ownable {
 
     // ============ Receive ============
 
-    /// @notice Receive function to accept plain ETH transfers
+    /// @notice Receive function to accept plain MNT transfers
     receive() external payable {
         revert("Use deposit() instead");
     }
