@@ -145,6 +145,7 @@ fn test_insufficient_balance_fails() {
 #[test(should_fail_with = "Invalid nullifier")]
 fn test_wrong_nullifier_fails() {
     let secret: Field = 123456789;
+
     let balance: Field = 2000000000000000000;
     let nonce: Field = 0;
     let index: Field = 0;
@@ -166,6 +167,7 @@ fn test_wrong_nullifier_fails() {
 
     // Use wrong nullifier
     let wrong_nullifier: Field = 999999;
+
 
     verify_withdrawal(
         state_root,

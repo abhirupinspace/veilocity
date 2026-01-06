@@ -57,6 +57,10 @@ fn compute_leaf(pubkey: Field, balance: Field, nonce: Field) -> Field {
     hash3(pubkey, balance, nonce)
 }
 
+
+
+// The leafs computed are known to be at certain indices in the tree that makes the entire tree valid
+
 // Compute root from leaf and path
 fn compute_root_from_path(leaf: Field, index: Field, path: [Field; TREE_DEPTH]) -> Field {
     let mut current = leaf;
@@ -65,8 +69,8 @@ fn compute_root_from_path(leaf: Field, index: Field, path: [Field; TREE_DEPTH]) 
     for i in 0..TREE_DEPTH {
         let sibling = path[i];
         // Bit at position (TREE_DEPTH - 1 - i) determines left/right
-        // We use reverse order because to_be_bits gives big-endian
-        let bit = index_bits[TREE_DEPTH - 1 - i];
+        // We use reverse order because to_be_bits gives big-endian order
+        let bit =index_bits[TREE_DEPTH-1-i];
 
         if bit == 0 {
             // Current node is on the left

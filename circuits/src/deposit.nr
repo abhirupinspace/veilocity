@@ -29,6 +29,8 @@ pub fn verify_deposit(commitment: Field, amount: Field, secret: Field) {
     assert(amount == amount_u64 as Field, "Amount overflow");
 }
 
+
+
 #[test]
 fn test_valid_deposit() {
     let secret: Field = 123456789;

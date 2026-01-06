@@ -29,7 +29,7 @@ impl NetworkConfig {
     /// Mantle Sepolia testnet configuration
     pub fn sepolia() -> Self {
         Self {
-            rpc_url: "https://rpc.sepolia.mantle.xyz".to_string(),
+            rpc_url: "https://mantle-sepolia.drpc.org".to_string(),
             chain_id: 5003,
             vault_address: String::new(), // To be set after deployment
             explorer_url: Some("https://explorer.sepolia.mantle.xyz".to_string()),
@@ -77,7 +77,7 @@ pub struct SyncConfig {
     pub confirmations: u64,
     /// Block number where the contract was deployed (to avoid scanning from genesis)
     pub deployment_block: Option<u64>,
-    /// Indexer URL for fast sync (optional - falls back to RPC if not set)
+    /// Indexer URL for fast sync (optional then falls back to RPC if not set)
     pub indexer_url: Option<String>,
 }
 

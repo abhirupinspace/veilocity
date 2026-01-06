@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "./connect-button";
 import { ArrowDownLeft, ArrowUpRight, LayoutDashboard, History } from "lucide-react";
+import logo from "./images/veilocitylight-logo.png";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -50,7 +52,13 @@ export function Nav() {
       {/* Top Header - Mobile */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/95 backdrop-blur-sm">
         <div className="px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-3">
+            <Image
+              src={logo}
+              alt="Veilocity"
+              height={22}
+              className="opacity-90 hover:opacity-100 transition-opacity"
+            />
             <span className="font-mono text-xs uppercase tracking-[0.2em] text-accent">Veilocity</span>
           </Link>
           <ConnectButton />
@@ -78,8 +86,16 @@ export function Nav() {
       {/* Desktop Header */}
       <header className="hidden md:block fixed top-0 left-16 right-0 z-40 border-b border-border/30 bg-background/95 backdrop-blur-sm">
         <div className="px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-xs uppercase tracking-[0.2em] text-accent">Veilocity</span>
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-3">
+              <Image
+                src={logo}
+                alt="Veilocity"
+                height={24}
+                className="opacity-90 hover:opacity-100 transition-opacity"
+              />
+              <span className="font-mono text-xs uppercase tracking-[0.2em] text-accent">Veilocity</span>
+            </Link>
             <span className="text-muted-foreground/30">|</span>
             <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
               {navItems.find(item => item.href === pathname)?.label || "Demo"}

@@ -13,6 +13,7 @@ use tracing_subscriber::EnvFilter;
 
 pub mod commands;
 pub mod config;
+pub mod tui;
 pub mod ui;
 pub mod wallet;
 
@@ -39,7 +40,7 @@ pub mod wallet;
   veilocity config set vault <addr> Set vault contract address")]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 
     /// Config file path
     #[arg(short, long, default_value = "~/.veilocity/config.toml")]
@@ -140,29 +141,34 @@ async fn main() -> anyhow::Result<()> {
     // Load config
     let config = config::load_config(&cli.config, &cli.network)?;
 
+    // If no command provided, launch TUI
     let result = match cli.command {
-        Commands::Init { recover } => {
+        None => {
+            // Launch TUI by default
+            tui::run(config).await
+        }
+        Some(Commands::Init { recover }) => {
             commands::init::run(recover).await
         }
-        Commands::Deposit { amount, dry_run } => {
+        Some(Commands::Deposit { amount, dry_run }) => {
             commands::deposit::run(&config, amount, dry_run).await
         }
-        Commands::Transfer { recipient, amount, dry_run } => {
+        Some(Commands::Transfer { recipient, amount, dry_run }) => {
             commands::transfer::run(&config, &recipient, amount, dry_run).await
         }
-        Commands::Withdraw { amount, recipient, dry_run } => {
+        Some(Commands::Withdraw { amount, recipient, dry_run }) => {
             commands::withdraw::run(&config, amount, recipient, dry_run).await
         }
-        Commands::Balance => {
+        Some(Commands::Balance) => {
             commands::balance::run(&config).await
         }
-        Commands::Sync => {
+        Some(Commands::Sync) => {
             commands::sync::run(&config).await
         }
-        Commands::History => {
+        Some(Commands::History) => {
             commands::history::run(&config).await
         }
-        Commands::Config { action, key, value } => {
+        Some(Commands::Config { action, key, value }) => {
             let config_action = match action.as_deref() {
                 Some("set") => {
                     let k = key.ok_or_else(|| anyhow::anyhow!("Missing key. Usage: veilocity config set <key> <value>"))?;

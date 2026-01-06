@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { VaultStats } from "@/components/vault-stats";
 import { PrivateBalance } from "@/components/private-balance";
 import { useChainId } from "wagmi";
 import { ArrowDownLeft, ArrowUpRight, ExternalLink } from "lucide-react";
 import { VAULT_ADDRESSES } from "@/lib/abi";
+import logo from "@/components/images/veilocitylight-logo.png";
 
 export default function Dashboard() {
   const chainId = useChainId();
@@ -18,16 +20,29 @@ export default function Dashboard() {
   return (
     <div className="space-y-12">
       {/* Hero */}
-      <section>
-        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">
-          Private Execution Layer
-        </span>
-        <h1 className="mt-3 text-3xl md:text-4xl font-medium tracking-tight">
-          Dashboard
-        </h1>
-        <p className="mt-4 max-w-md font-mono text-sm text-muted-foreground leading-relaxed">
-          Manage your private balance and execute confidential transactions on Mantle.
-        </p>
+      <section className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-4 mb-6">
+            <Image
+              src={logo}
+              alt="Veilocity"
+              height={48}
+              className="opacity-95"
+            />
+            <span className="font-mono text-2xl md:text-3xl uppercase tracking-[0.15em] text-accent font-medium">
+              Veilocity
+            </span>
+          </div>
+          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">
+            Private Execution Layer
+          </span>
+          <h1 className="mt-3 text-3xl md:text-4xl font-medium tracking-tight">
+            Dashboard
+          </h1>
+          <p className="mt-4 max-w-md font-mono text-sm text-muted-foreground leading-relaxed">
+            Manage your private balance and execute confidential transactions on Mantle.
+          </p>
+        </div>
       </section>
 
       {/* Private Balance */}
